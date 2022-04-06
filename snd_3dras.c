@@ -117,7 +117,7 @@ static const char* ras_dllname [] =
 {
 #if defined(WIN32)
 		"3dras32.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"3dras.dylib",
 #else
 		"3dras.so",

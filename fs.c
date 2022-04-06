@@ -502,7 +502,7 @@ static qboolean PK3_OpenLibrary (void)
 # else
 		"zlib1.dll",
 # endif
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libz.dylib",
 #else
 		"libz.so.1",
@@ -1868,7 +1868,7 @@ static int FS_ChooseUserDir(userdirmode_t userdirmode, char *userdir, size_t use
 		homedir = getenv("HOME");
 		if(homedir)
 		{
-#ifdef MACOSX
+#ifdef __APPLE__
 			dpsnprintf(userdir, userdirsize, "%s/Library/Application Support/%s/", homedir, gameuserdirname);
 #else
 			// the XDG say some files would need to go in:
@@ -1957,7 +1957,7 @@ void FS_Init (void)
 		strlcpy(fs_basedir, ".", sizeof(fs_basedir));
 #elif defined(__ANDROID__)
 		dpsnprintf(fs_basedir, sizeof(fs_basedir), "/sdcard/%s/", gameuserdirname);
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		// FIXME: is there a better way to find the directory outside the .app, without using Objective-C?
 		if (strstr(com_argv[0], ".app/"))
 		{

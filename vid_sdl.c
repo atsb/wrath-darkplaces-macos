@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "dpsoftrast.h"
 
 #ifndef __IPHONEOS__
-#ifdef MACOSX
+#ifdef __APPLE__
 #include <Carbon/Carbon.h>
 #include <IOKit/hidsystem/IOHIDLib.h>
 #include <IOKit/hidsystem/IOHIDParameter.h>
@@ -411,7 +411,7 @@ qboolean VID_ShowingKeyboard(void)
 void VID_SetMouse(qboolean fullscreengrab, qboolean relative, qboolean hidecursor)
 {
 #ifndef DP_MOBILETOUCH
-#ifdef MACOSX
+#ifdef __APPLE__
 	if(relative)
 		if(vid_usingmouse && (vid_usingnoaccel != !!apple_mouse_noaccel.integer))
 			VID_SetMouse(false, false, false); // ungrab first!
@@ -426,7 +426,7 @@ void VID_SetMouse(qboolean fullscreengrab, qboolean relative, qboolean hidecurso
 		vid_usingmouse_relativeworks = SDL_SetRelativeMouseMode(relative ? SDL_TRUE : SDL_FALSE) == 0;
 //		Con_Printf("VID_SetMouse(%i, %i, %i) relativeworks = %i\n", (int)fullscreengrab, (int)relative, (int)hidecursor, (int)vid_usingmouse_relativeworks);
 #endif
-#ifdef MACOSX
+#ifdef __APPLE__
 		if(relative)
 		{
 			// Save the status of mouse acceleration
@@ -2055,7 +2055,7 @@ static qboolean vid_sdl_initjoysticksystem = false;
 void VID_Init (void)
 {
 #ifndef __IPHONEOS__
-#ifdef MACOSX
+#ifdef __APPLE__
 	Cvar_RegisterVariable(&apple_mouse_noaccel);
 #endif
 #endif
@@ -2165,7 +2165,7 @@ static SDL_Surface *VID_WrapSDL_SetVideoMode(int screenwidth, int screenheight, 
 	}
 	return screen;
 }
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 static SDL_Surface *VID_WrapSDL_SetVideoMode(int screenwidth, int screenheight, int screenbpp, int screenflags)
 {
 	SDL_Surface *screen = NULL;
@@ -2774,7 +2774,7 @@ void VID_Shutdown (void)
 
 #if SDL_MAJOR_VERSION == 1
 #ifndef WIN32
-#ifndef MACOSX
+#ifndef __APPLE__
 	if (icon)
 		SDL_FreeSurface(icon);
 	icon = NULL;

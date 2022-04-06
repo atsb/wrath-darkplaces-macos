@@ -22,22 +22,20 @@ CC?=gcc
 # Experimental
 #CPUOPTIMIZATIONS?=-fno-math-errno -ffinite-math-only -fno-rounding-math -fno-signaling-nans -fassociative-math -freciprocal-math -fno-signed-zeros -fno-trapping-math
 # Normal
-CPUOPTIMIZATIONS?=-fno-math-errno -ffinite-math-only -fno-rounding-math -fno-signaling-nans -fno-trapping-math
+CPUOPTIMIZATIONS?=-fno-math-errno -fno-rounding-math -fno-trapping-math
 # NOTE: *never* *ever* use the -ffast-math or -funsafe-math-optimizations flag
 
-SDL_CONFIG?=sdl-config
-SDL2_CONFIG?=sdl2-config
+SDL_CONFIG?=sdl2-config
 SDLCONFIG_UNIXCFLAGS?=`$(SDL_CONFIG) --cflags`
 SDLCONFIG_UNIXCFLAGS_X11?=
 SDLCONFIG_UNIXLIBS?=`$(SDL_CONFIG) --libs`
 SDLCONFIG_UNIXLIBS_X11?=-lX11
 SDLCONFIG_UNIXSTATICLIBS?=`$(SDL_CONFIG) --static-libs`
 SDLCONFIG_UNIXSTATICLIBS_X11?=-lX11
-SDLCONFIG_MACOSXCFLAGS=-I/Library/Frameworks/SDL.framework/Headers -I$(HOME)/Library/Frameworks/SDL.framework/Headers
-SDLCONFIG_MACOSXLIBS=-F$(HOME)/Library/Frameworks/ -framework SDL -framework Cocoa $(SDLCONFIG_MACOSXCFLAGS)
-SDLCONFIG_MACOSXSTATICLIBS=-F$(HOME)/Library/Frameworks/ -framework SDL -framework Cocoa $(SDLCONFIG_MACOSXCFLAGS)
+SDLCONFIG_MACOSXCFLAGS=$(SDLCONFIG_UNIXCFLAGS)
+SDLCONFIG_MACOSXLIBS=$(SDLCONFIG_UNIXLIBS)
+SDLCONFIG_MACOSXSTATICLIBS=$(SDLCONFIG_UNIXSTATICLIBS)
 STRIP?=strip
-
 
 ###### Sound and audio CD #####
 
@@ -236,19 +234,10 @@ LDFLAGS_LINUXSDL=$(LDFLAGS_UNIXCOMMON) -lrt -ldl $(LDFLAGS_UNIXSDL)
 
 ##### Mac OS X specific variables #####
 
-# No CD support available
-OBJ_MACOSXCD=$(OBJ_NOCD)
 
 # Link
-LDFLAGS_MACOSXCL=$(LDFLAGS_UNIXCOMMON) -ldl -framework IOKit -framework Carbon $(LIB_SOUND)
 LDFLAGS_MACOSXSV=$(LDFLAGS_UNIXCOMMON) -ldl
-LDFLAGS_MACOSXSDL=$(LDFLAGS_UNIXCOMMON) -ldl -framework IOKit $(SDLCONFIG_STATICLIBS) ../../../SDLMain.m
-
-OBJ_AGL= builddate.c sys_linux.o vid_agl.o thread_null.o $(OBJ_MENU) $(OBJ_SOUND) $(OBJ_CD) $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
-
-EXE_MACOSXCL=darkplaces-agl
-EXE_MACOSXCLNEXUIZ=nexuiz-agl
-
+LDFLAGS_MACOSXSDL=$(LDFLAGS_UNIXCOMMON) -ldl -framework IOKit $(SDLCONFIG_STATICLIBS) #../../../SDLMain.m
 
 ##### SunOS specific variables #####
 

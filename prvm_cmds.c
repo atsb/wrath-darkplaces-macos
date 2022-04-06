@@ -3096,7 +3096,7 @@ void VM_getostype(prvm_prog_t *prog)
 
 #ifdef WIN32
 	PRVM_G_FLOAT(OFS_RETURN) = 0;
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 	PRVM_G_FLOAT(OFS_RETURN) = 2;
 #else
 	PRVM_G_FLOAT(OFS_RETURN) = 1;

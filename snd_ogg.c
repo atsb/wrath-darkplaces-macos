@@ -277,7 +277,7 @@ qboolean OGG_OpenLibrary (void)
 		"libvorbis-0.dll",
 		"libvorbis.dll",
 		"vorbis.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libvorbis.dylib",
 #else
 		"libvorbis.so.0",
@@ -291,7 +291,7 @@ qboolean OGG_OpenLibrary (void)
 		"libvorbisfile-3.dll",
 		"libvorbisfile.dll",
 		"vorbisfile.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libvorbisfile.dylib",
 #else
 		"libvorbisfile.so.3",

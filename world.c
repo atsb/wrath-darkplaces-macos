@@ -1477,7 +1477,7 @@ static void World_Physics_Init(void)
 		"libode3.dll",
 		"libode2.dll",
 		"libode1.dll",
-# elif defined(MACOSX)
+# elif defined(__APPLE__)
 		"libode.3.dylib",
 		"libode.2.dylib",
 		"libode.1.dylib",

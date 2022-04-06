@@ -347,7 +347,7 @@ qboolean Font_OpenLibrary (void)
 #if defined(WIN32)
 		"libfreetype-6.dll",
 		"freetype6.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libfreetype.6.dylib",
 		"libfreetype.dylib",
 #else

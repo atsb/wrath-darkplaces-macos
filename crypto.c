@@ -260,7 +260,7 @@ static qboolean Crypto_OpenLibrary (void)
 	{
 #if defined(WIN32)
 		"libd0_blind_id-0.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libd0_blind_id.0.dylib",
 #else
 		"libd0_blind_id.so.0",
@@ -329,7 +329,7 @@ static qboolean Crypto_Rijndael_OpenLibrary (void)
 	{
 #if defined(WIN32)
 		"libd0_rijndael-0.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libd0_rijndael.0.dylib",
 #else
 		"libd0_rijndael.so.0",

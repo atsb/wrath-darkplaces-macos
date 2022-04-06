@@ -497,7 +497,7 @@ qboolean JPEG_OpenLibrary (void)
 	{
 #if defined(WIN32)
 		"libjpeg.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libjpeg.62.dylib",
 #else
 		"libjpeg.so.62",

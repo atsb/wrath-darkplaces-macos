@@ -28,11 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 # define strncasecmp _strnicmp
 #endif
 
-// Create our own define for Mac OS X
-#if defined(__APPLE__) && defined(__MACH__)
-# define MACOSX
-#endif
-
 #ifdef SUNOS
 #include <sys/file.h>		///< Needed for FNDELAY
 #endif
@@ -351,7 +346,7 @@ void InfoString_Print(char *buffer);
 
 // strlcat and strlcpy, from OpenBSD
 // Most (all?) BSDs already have them
-#if defined(__OpenBSD__) || defined(__NetBSD__) || defined(__FreeBSD__) || defined(MACOSX)
+#if defined(__OpenBSD__) || defined(__NetBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
 # define HAVE_STRLCAT 1
 # define HAVE_STRLCPY 1
 #endif

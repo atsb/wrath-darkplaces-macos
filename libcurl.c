@@ -360,7 +360,7 @@ static qboolean CURL_OpenLibrary (void)
 #if defined(WIN32)
 		"libcurl-4.dll",
 		"libcurl-3.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libcurl.4.dylib", // Mac OS X Notyetreleased
 		"libcurl.3.dylib", // Mac OS X Tiger
 		"libcurl.2.dylib", // Mac OS X Panther

@@ -531,7 +531,7 @@ static qboolean SCR_CaptureVideo_Ogg_OpenLibrary(void)
 		"libogg-0.dll",
 		"libogg.dll",
 		"ogg.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libogg.dylib",
 #else
 		"libogg.so.0",
@@ -545,7 +545,7 @@ static qboolean SCR_CaptureVideo_Ogg_OpenLibrary(void)
 		"libvorbis-0.dll",
 		"libvorbis.dll",
 		"vorbis.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libvorbis.dylib",
 #else
 		"libvorbis.so.0",
@@ -559,7 +559,7 @@ static qboolean SCR_CaptureVideo_Ogg_OpenLibrary(void)
 		"libvorbisenc-2.dll",
 		"libvorbisenc.dll",
 		"vorbisenc.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libvorbisenc.dylib",
 #else
 		"libvorbisenc.so.2",
@@ -573,7 +573,7 @@ static qboolean SCR_CaptureVideo_Ogg_OpenLibrary(void)
 		"libtheora-0.dll",
 		"libtheora.dll",
 		"theora.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libtheora.dylib",
 #else
 		"libtheora.so.0",

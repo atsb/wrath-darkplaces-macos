@@ -86,7 +86,7 @@ const char* dllnames_libavw[] =
 {
 #if defined(WIN32)
 		"libavw.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libavw.dylib",
 #else
 		"libavw.so.1",

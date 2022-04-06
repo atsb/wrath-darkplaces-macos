@@ -152,7 +152,7 @@ qboolean PNG_OpenLibrary (void)
 		"libpng14-14.dll",
 		"libpng14.dll",
 		"libpng12.dll",
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 		"libpng16.16.dylib",
 		"libpng15.15.dylib",
 		"libpng14.14.dylib",
@@ -514,7 +514,7 @@ qboolean PNG_SaveImage_preflipped (const char *filename, int width, int height, 
 #ifdef __cplusplus
 #ifdef WIN64
 	if (setjmp((_JBTYPE *)png))
-#elif defined(MACOSX) || defined(WIN32)
+#elif defined(__APPLE__) || defined(WIN32)
 	if (setjmp((int *)png))
 #elif defined(__ANDROID__)
 	if (setjmp((long *)png))

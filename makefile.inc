@@ -237,7 +237,7 @@ LDFLAGS_LINUXSDL=$(LDFLAGS_UNIXCOMMON) -lrt -ldl $(LDFLAGS_UNIXSDL)
 
 # Link
 LDFLAGS_MACOSXSV=$(LDFLAGS_UNIXCOMMON) -ldl
-LDFLAGS_MACOSXSDL=$(LDFLAGS_UNIXCOMMON) -ldl -framework IOKit $(SDLCONFIG_STATICLIBS) #../../../SDLMain.m
+LDFLAGS_MACOSXSDL=$(LDFLAGS_UNIXCOMMON) -F$(HOME)/Library/Frameworks/ -ldl -framework IOKit -framework SDL2 -framework Cocoa -framework Foundation
 
 ##### SunOS specific variables #####
 

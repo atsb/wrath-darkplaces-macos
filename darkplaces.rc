@@ -11,17 +11,15 @@ FILETYPE VFT_APP
 	 {
 		 BLOCK "040904E4"
 		 {
-			 VALUE "CompanyName", "Forest Hale Digital Services"
+			 VALUE "CompanyName", "KillPixel Games"
 			 VALUE "FileVersion", "1.0"
-			 VALUE "FileDescription", "DarkPlaces Game Engine"
-			 VALUE "InternalName", "darkplaces.exe"
-			 VALUE "LegalCopyright", "id Software, Forest Hale, and contributors"
+			 VALUE "FileDescription", "Wrath: Aeon of Ruin"
+			 VALUE "InternalName", "Wrath.exe"
+			 VALUE "LegalCopyright", "KillPixel Games, Forest Hale"
 			 VALUE "LegalTrademarks", ""
-			 VALUE "OriginalFilename", "darkplaces.exe"
-			 VALUE "ProductName", "DarkPlaces"
+			 VALUE "OriginalFilename", "Wrath.exe"
+			 VALUE "ProductName", "Wrath"
 			 VALUE "ProductVersion", "1.0"
 		 }
 	 }
 }
-
-1 RT_MANIFEST darkplaces.exe.manifest

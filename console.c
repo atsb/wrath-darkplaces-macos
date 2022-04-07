@@ -1456,6 +1456,27 @@ void Con_Printf(const char *fmt, ...)
 	Con_MaskPrint(CON_MASK_PRINT, msg);
 }
 
+#ifdef _WIN32
+#include <windows.h>
+/* FILETIME of Jan 1 1970 00:00:00. */
+static const unsigned __int64 epoch = ((unsigned __int64)116444736000000000ULL);
+static int gettimeofday(struct timeval * tp, struct timezone * tzp)
+{
+    FILETIME    file_time;
+    SYSTEMTIME  system_time;
+    ULARGE_INTEGER ularge;
+
+    GetSystemTime(&system_time);
+    SystemTimeToFileTime(&system_time, &file_time);
+    ularge.LowPart = file_time.dwLowDateTime;
+    ularge.HighPart = file_time.dwHighDateTime;
+
+    tp->tv_sec = (long) ((ularge.QuadPart - epoch) / 10000000L);
+    tp->tv_usec = (long) (system_time.wMilliseconds * 1000);
+
+    return 0;
+}
+#endif
 
 /*
 ================
@@ -1477,7 +1498,7 @@ const char *Con_Timestamp(void)
 	// Build the time stamp (ex: "21:49:08.093");
 	gettimeofday (&tv, NULL);
 	cur_time = tv.tv_sec;
-#if _MSC_VER >= 1400
+#if _MSC_VER
 	localtime_s (&crt_tm, &cur_time);
 	strftime (timestring, sizeof (timestring), "%H:%M:%S", &crt_tm);
 #else

@@ -54,7 +54,7 @@ static void Key_History_Init(void)
 
 // not necessary for mobile
 #ifndef DP_MOBILETOUCH
-	historyfile = FS_OpenRealFile("darkplaces_history.txt", "rb", false); // rb to handle unix line endings on windows too
+	historyfile = FS_OpenRealFile("wrath_history.txt", "rb", false); // rb to handle unix line endings on windows too
 	if(historyfile)
 	{
 		char buf[MAX_INPUTLINE];
@@ -96,7 +96,7 @@ static void Key_History_Shutdown(void)
 
 // not necessary for mobile
 #ifndef DP_MOBILETOUCH
-	qfile_t *historyfile = FS_OpenRealFile("darkplaces_history.txt", "w", false);
+	qfile_t *historyfile = FS_OpenRealFile("wrath_history.txt", "w", false);
 	if(historyfile)
 	{
 		int i;

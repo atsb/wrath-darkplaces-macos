@@ -1,4 +1,6 @@
-# wrath-darkplaces
+# wrathplaces
+
+A fixed and cleaned up version of the Wrath Darkplaces fork.
 
 This is the fork of [LordHavoc's DarkPlaces Quake engine](https://icculus.org/twilight/darkplaces/) that is used in the game [WRATH: Aeon of Ruin](http://wrath.game/).
 It's based on the [13/05/2014 DarkPlaces source snapshot](https://icculus.org/twilight/darkplaces/files/darkplacesengine20140513.zip), with some minor additions and alterations.
@@ -6,16 +8,18 @@ It's based on the [13/05/2014 DarkPlaces source snapshot](https://icculus.org/tw
 ## This repository
 This repository contains the up-to-date version of the source code used to build the WRATH binaries. It'll be updated with every Steam/GOG update that changes the binaries.
 
-Pull requests to this repository are **not** accepted.
+Contributers are welcome.
 
 ## Building
 Currently the only version of the executable on Steam/GOG is the WGL x64 build. SDL/SDL2 builds work on both Windows and Linux, but have some mouse-related issues in the UI. The Linux GLX build has slight sound issues with the ALSA backend.
 
-This has not been built or tested on MacOS X yet, but it might work.
+macOS also is working with SDL2.
 
 ### Dependencies
+Visual Studio Projects are fixed.
+
 (or at least what the Steam/GOG binaries are built and shipped with)
-* `mingw-w64` / `gcc` (Visual Studio projects/builds are currently somewhat broken);
+* `mingw-w64` / `gcc`;
 * `libjpeg` or `libjpeg-turbo`;
 * `libogg`, `libvorbis` and `libvorbisfile`;
 * `libpng 1.6`;

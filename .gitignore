@@ -17,3 +17,6 @@
 *.ipch
 *.opendb
 *.user
+.DS_Store
+wrath
+wrath-dedicated

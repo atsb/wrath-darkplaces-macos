@@ -1833,6 +1833,10 @@ void PRVM_Prog_Reset(prvm_prog_t *prog)
 {
 	if (prog->loaded)
 	{
+		if (prog->tempstringsbuf.cursize)
+			Mem_Free(prog->tempstringsbuf.data);
+
+		prog->tempstringsbuf.cursize = 0;
 		PRVM_LeakTest(prog);
 		prog->reset_cmd(prog);
 		Mem_FreePool(&prog->progs_mempool);

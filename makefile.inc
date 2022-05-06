@@ -26,11 +26,13 @@ CPUOPTIMIZATIONS?=-fno-math-errno -fno-rounding-math -fno-trapping-math
 # NOTE: *never* *ever* use the -ffast-math or -funsafe-math-optimizations flag
 
 SDL_CONFIG?=sdl2-config
-SDLCONFIG_UNIXCFLAGS?=`$(SDL_CONFIG) --cflags`
+# ATS - 2022 - I added this here as on some linux distro's it doesn't find it
+# and instead complains that --cflags isn't valid.  So lets just use the whole thing.
+SDLCONFIG_UNIXCFLAGS?=`sdl2-config --cflags --libs`
 SDLCONFIG_UNIXCFLAGS_X11?=
-SDLCONFIG_UNIXLIBS?=`$(SDL_CONFIG) --libs`
+SDLCONFIG_UNIXLIBS?=`sdl2-config --cflags --libs`
 SDLCONFIG_UNIXLIBS_X11?=-lX11
-SDLCONFIG_UNIXSTATICLIBS?=`$(SDL_CONFIG) --static-libs`
+SDLCONFIG_UNIXSTATICLIBS?=`sdl2-config --cflags --static-libs`
 SDLCONFIG_UNIXSTATICLIBS_X11?=-lX11
 SDLCONFIG_MACOSXCFLAGS=$(SDLCONFIG_UNIXCFLAGS)
 SDLCONFIG_MACOSXLIBS=$(SDLCONFIG_UNIXLIBS)
@@ -48,10 +50,6 @@ LIB_SND_NULL=
 # Open Sound System (Linux, FreeBSD and Solaris)
 OBJ_SND_OSS=$(OBJ_SND_COMMON) snd_oss.o
 LIB_SND_OSS=
-
-# Advanced Linux Sound Architecture (Linux)
-OBJ_SND_ALSA=$(OBJ_SND_COMMON) snd_alsa.o
-LIB_SND_ALSA=-lasound
 
 # Core Audio (Mac OS X)
 OBJ_SND_COREAUDIO=$(OBJ_SND_COMMON) snd_coreaudio.o
@@ -166,7 +164,7 @@ OBJ_MENU= \
 # note that builddate.c is very intentionally not compiled to a .o before
 # being linked, because it should be recompiled every time an executable is
 # built to give the executable a proper date string
-OBJ_SV= builddate.c sys_linux.o vid_null.o thread_null.o $(OBJ_SND_NULL) $(OBJ_COMMON)
+OBJ_SV= builddate.c vid_null.o thread_null.o $(OBJ_SND_NULL) $(OBJ_COMMON)
 OBJ_SDL= builddate.c sys_sdl.o vid_sdl.o thread_sdl.o $(OBJ_MENU) $(OBJ_SND_COMMON) snd_sdl.o $(OBJ_SDLCD) $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
 
 
@@ -202,7 +200,7 @@ LDFLAGS_RELEASE=$(OPTIM_RELEASE) -DSVNREVISION=`{ test -d .svn && svnversion; } 
 
 ##### UNIX specific variables #####
 
-OBJ_GLX= builddate.c sys_linux.o vid_glx.o thread_pthread.o keysym2ucs.o $(OBJ_MENU) $(OBJ_SOUND) $(OBJ_CD) $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
+OBJ_GLX= builddate.c keysym2ucs.o $(OBJ_MENU) $(OBJ_SOUND) $(OBJ_CD) $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
 
 LDFLAGS_UNIXCOMMON=-lm $(LIB_ODE) $(LIB_Z) $(LIB_JPEG) $(LIB_CRYPTO) $(LIB_CRYPTO_RIJNDAEL)
 LDFLAGS_UNIXCL=-L$(UNIX_X11LIBPATH) -lX11 -lXpm -lXext -lXxf86vm -pthread $(LIB_SOUND)
@@ -489,10 +487,6 @@ prvm_cmds.o: prvm_cmds.c
 world.o: world.c
 	$(CHECKLEVEL2)
 	$(DO_CC) $(CFLAGS_ODE)
-
-vid_glx.o: vid_glx.c
-	$(CHECKLEVEL2)
-	$(DO_CC) -I/usr/X11R6/include
 
 keysym2ucs.o: keysym2ucs.c
 	$(CHECKLEVEL2)

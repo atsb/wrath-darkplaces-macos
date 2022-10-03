@@ -234,3 +234,7 @@ void Sys_SDL_Delay (unsigned int milliseconds)
 {
 	SDL_Delay(milliseconds);
 }
+char* Sys_SDL_GetBasePath(void) 
+{
+	return SDL_GetBasePath();
+}

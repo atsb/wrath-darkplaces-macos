@@ -499,6 +499,7 @@ qboolean JPEG_OpenLibrary (void)
 		"libjpeg.dll",
 #elif defined(__APPLE__)
 		"libjpeg.62.dylib",
+		"libjpeg.dylib",
 #else
 		"libjpeg.so.62",
 		"libjpeg.so",

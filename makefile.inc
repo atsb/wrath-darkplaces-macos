@@ -189,7 +189,7 @@ OPTIM_DEBUG=$(CPUOPTIMIZATIONS)
 OPTIM_RELEASE=-O3 -fno-strict-aliasing $(CPUOPTIMIZATIONS)
 # NOTE: *never* *ever* use the -ffast-math or -funsafe-math-optimizations flag
 
-DO_CC=$(CC) $(CFLAGS) -c $< -o $@
+DO_CC=$(CC) -arch $(ARCH) $(CFLAGS) -c $< -o $@
 
 
 # Link
@@ -235,7 +235,7 @@ LDFLAGS_LINUXSDL=$(LDFLAGS_UNIXCOMMON) -lrt -ldl $(LDFLAGS_UNIXSDL)
 
 # Link
 LDFLAGS_MACOSXSV=$(LDFLAGS_UNIXCOMMON) -ldl
-LDFLAGS_MACOSXSDL=$(LDFLAGS_UNIXCOMMON) -F$(HOME)/Library/Frameworks/ -ldl -framework IOKit -framework SDL2 -framework Cocoa -framework Foundation
+LDFLAGS_MACOSXSDL=$(LDFLAGS_UNIXCOMMON) -F/System/Library/Frameworks/ -ldl -framework IOKit -L$(LIB_DIR) -lSDL2 -framework Cocoa -framework Foundation
 
 ##### SunOS specific variables #####
 

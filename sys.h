@@ -112,6 +112,7 @@ char *Sys_GetClipboardData (void);
 extern qboolean sys_supportsdlgetticks;
 unsigned int Sys_SDL_GetTicks (void); // wrapper to call SDL_GetTicks
 void Sys_SDL_Delay (unsigned int milliseconds); // wrapper to call SDL_Delay
+char* Sys_SDL_GetBasePath(void);
 
 /// called to set process priority for dedicated servers
 void Sys_InitProcessNice (void);

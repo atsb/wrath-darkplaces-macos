@@ -405,7 +405,7 @@ endif
 
 ##### GNU Make specific definitions #####
 
-DO_LD=$(CC) -o ../../../$@ $^ $(LDFLAGS)
+DO_LD=$(CC) -arch $(ARCH) -o ../../../$@ $^ $(LDFLAGS)
 
 
 ##### Definitions shared by all makefiles #####

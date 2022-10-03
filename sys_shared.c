@@ -167,7 +167,7 @@ notfound:
 	if (!dllhandle && strrchr(com_argv[0], '/'))
 	{
 		char path[MAX_OSPATH];
-		strlcpy(path, com_argv[0], sizeof(path));
+		strlcpy(path, Sys_SDL_GetBasePath(), sizeof(path));
 		strrchr(path, '/')[1] = 0;
 		for (i = 0; dllnames[i] != NULL; i++)
 		{

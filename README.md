@@ -50,3 +50,6 @@ Alternatively instead of renaming you can pass `-wrath` as a command line parame
 
 ## License
 DarkPlaces and this fork are licensed under version 2 of the GNU General Public License. A copy of the license is included in this repository (see [`COPYING`](https://github.com/KillPixelGames/wrath-darkplaces/blob/master/COPYING)).
+
+## Source Port Future
+This source port of Wrath will be updated and developed more frequently once the full complete game has shipped.  There are many things I'd love to do, but I want to keep a known, working base until the full product is with us.  Wrathplaces will eventually become the 'quakespasm' of Wrath, once full development begins.

@@ -189,7 +189,7 @@ OPTIM_DEBUG=$(CPUOPTIMIZATIONS)
 OPTIM_RELEASE=-O3 -fno-strict-aliasing $(CPUOPTIMIZATIONS)
 # NOTE: *never* *ever* use the -ffast-math or -funsafe-math-optimizations flag
 
-DO_CC=$(CC) -arch $(ARCH) $(CFLAGS) -c $< -o $@
+DO_CC=$(CC) -arch $(ARCH) -mmacosx-version-min=10.9 $(CFLAGS) -c $< -o $@
 
 
 # Link

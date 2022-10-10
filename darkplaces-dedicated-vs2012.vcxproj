@@ -234,6 +234,7 @@
     <ClCompile Include="model_sprite.c" />
     <ClCompile Include="mvm_cmds.c" />
     <ClCompile Include="netconn.c" />
+    <ClCompile Include="nodegraph.c" />
     <ClCompile Include="palette.c" />
     <ClCompile Include="polygon.c" />
     <ClCompile Include="portals.c" />
@@ -326,6 +327,7 @@
     <ClInclude Include="modelgen.h" />
     <ClInclude Include="mprogdefs.h" />
     <ClInclude Include="netconn.h" />
+    <ClInclude Include="nodegraph.h" />
     <ClInclude Include="palette.h" />
     <ClInclude Include="polygon.h" />
     <ClInclude Include="portals.h" />

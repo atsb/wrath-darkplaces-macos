@@ -519,7 +519,7 @@ CL_Input
 Send the intended movement message to the server
 ================
 */
-void CL_Input (void)
+void CL_Input(void)
 {
 	float mx, my;
 	static float old_mouse_x = 0, old_mouse_y = 0;
@@ -1306,6 +1306,20 @@ static void CL_ClientMovement_Physics_Walk(cl_clientmovement_state_t *s)
 	trace_t trace;
 	qboolean moving;
 
+	gravity = cl.movevars_gravity * cl.movevars_entgravity * s->cmd.frametime;
+	if (cl.moveflags & MOVEFLAG_GRAVITYUNAFFECTEDBYTICRATE)
+		s->velocity[2] -= gravity * 0.5f;
+	else
+		s->velocity[2] -= gravity;
+	moving = s->velocity[0] || s->velocity[1];
+	CL_ClientMovement_Move(s);
+	if (!(cl.moveflags & MOVEFLAG_NOGRAVITYONGROUND) || !s->onground || (s->onground && moving))
+	{
+		if (cl.moveflags & MOVEFLAG_GRAVITYUNAFFECTEDBYTICRATE)
+			s->velocity[2] -= gravity * 0.5f;
+	}
+	return;
+
 	// jump if on ground with jump button pressed but only if it has been
 	// released at least once since the last jump
 	if (s->cmd.jump)
@@ -1814,7 +1828,7 @@ void CL_SendMove(void)
 	// ridiculous value rejection (matches qw)
 	if (cl.cmd.msec > 250)
 		cl.cmd.msec = 100;
-	cl.cmd.frametime = cl.cmd.msec * (1.0 / 1000.0);
+	cl.cmd.frametime = (cl.cmd.time - cl.movecmd[1].time);//cl.cmd.msec * (1.0 / 1000.0);
 
 	cl.cmd.predicted = cl_movement.integer != 0;
 
@@ -1842,6 +1856,7 @@ void CL_SendMove(void)
 		break;
 	case PROTOCOL_DARKPLACES6:
 	case PROTOCOL_DARKPLACES7:
+	case PROTOCOL_WRATH:
 		// FIXME: cl.cmd.buttons & 16 is +button5, Nexuiz/Xonotic specific
 		cl.cmd.crouch = (cl.cmd.buttons & 16) != 0;
 		break;
@@ -1850,7 +1865,10 @@ void CL_SendMove(void)
 	}
 
 	if (quemove)
+	{
+		CL_VM_Input_Frame(&cl.cmd);
 		cl.movecmd[0] = cl.cmd;
+	}
 
 	// don't predict more than 200fps
 	if (realtime >= cl.lastpackettime + 0.005)
@@ -2049,6 +2067,52 @@ void CL_SendMove(void)
 				MSG_WriteFloat (&buf, cmd->cursor_impact[1]);
 				MSG_WriteFloat (&buf, cmd->cursor_impact[2]);
 				MSG_WriteShort (&buf, cmd->cursor_entitynumber);
+			}
+			break;
+		case PROTOCOL_WRATH:
+			// set the maxusercmds variable to limit how many should be sent
+			maxusercmds = bound(1, cl_netrepeatinput.integer + 1, min(3, CL_MAX_USERCMDS));
+			// when movement prediction is off, there's not much point in repeating old input as it will just be ignored
+			if (!cl.cmd.predicted)
+				maxusercmds = 1;
+
+			// send the latest moves in order, the old ones will be
+			// ignored by the server harmlessly, however if the previous
+			// packets were lost these moves will be used
+			//
+			// this reduces packet loss impact on gameplay.
+			for (j = 0, cmd = &cl.movecmd[maxusercmds - 1]; j < maxusercmds; j++, cmd--)
+			{
+				// don't repeat any stale moves
+				if (cmd->sequence && cmd->sequence < cls.servermovesequence)
+					continue;
+				// 5/9 bytes
+				MSG_WriteByte(&buf, clc_move);
+				MSG_WriteLong(&buf, cmd->predicted ? cmd->sequence : 0);
+				MSG_WriteFloat(&buf, cmd->time); // last server packet time
+				MSG_WriteByte(&buf, cmd->msec); // last server packet time
+				// 10 bytes
+				MSG_WriteAngle32f(&buf, cmd->viewangles[0]);
+				MSG_WriteAngle32f(&buf, cmd->viewangles[1]);
+				MSG_WriteAngle16i(&buf, cmd->viewangles[2]);
+				// 6 bytes
+				MSG_WriteCoord16i(&buf, cmd->forwardmove);
+				MSG_WriteCoord16i(&buf, cmd->sidemove);
+				MSG_WriteCoord16i(&buf, cmd->upmove);
+				// 5 bytes
+				MSG_WriteLong(&buf, cmd->buttons);
+				MSG_WriteByte(&buf, cmd->impulse);
+				// PRYDON_CLIENTCURSOR
+				// 30 bytes
+				MSG_WriteShort(&buf, (short)(cmd->cursor_screen[0] * 32767.0f));
+				MSG_WriteShort(&buf, (short)(cmd->cursor_screen[1] * 32767.0f));
+				MSG_WriteFloat(&buf, cmd->cursor_start[0]);
+				MSG_WriteFloat(&buf, cmd->cursor_start[1]);
+				MSG_WriteFloat(&buf, cmd->cursor_start[2]);
+				MSG_WriteFloat(&buf, cmd->cursor_impact[0]);
+				MSG_WriteFloat(&buf, cmd->cursor_impact[1]);
+				MSG_WriteFloat(&buf, cmd->cursor_impact[2]);
+				MSG_WriteShort(&buf, cmd->cursor_entitynumber);
 			}
 			break;
 		case PROTOCOL_UNKNOWN:

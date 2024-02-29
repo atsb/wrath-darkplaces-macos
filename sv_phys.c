@@ -2294,7 +2294,7 @@ SV_WalkMove
 Only used by players
 ======================
 */
-static void SV_WalkMove (prvm_edict_t *ent)
+void SV_WalkMove (prvm_edict_t *ent)
 {
 	prvm_prog_t *prog = SVVM_prog;
 	int clip;
@@ -2916,6 +2916,33 @@ void SV_Physics_ClientMove(void)
 	prvm_edict_t *ent;
 	ent = host_client->edict;
 
+	// Reki: Added support for SV_RunClientCommand
+	if (PRVM_serverfunction(SV_RunClientCommand))
+	{
+		usercmd_t *move = &host_client->cmd;
+		move->applied = true;
+		
+		SV_ApplyClientMove();
+
+		PRVM_serverglobalfloat(servercommandframe) = move->sequence;
+		PRVM_serverglobalfloat(input_timelength) = move->frametime;
+		PRVM_serverglobalfloat(input_buttons) = move->buttons;
+		PRVM_serverglobalfloat(input_impulse) = move->impulse;
+		VectorCopy(move->viewangles, PRVM_serverglobalvector(input_angles));
+		VectorSet(PRVM_serverglobalvector(input_movevalues), move->forwardmove, move->sidemove, move->upmove);
+
+		// make sure the velocity is sane (not a NaN)
+		SV_CheckVelocity(host_client->edict);
+
+		PRVM_serverglobalfloat(time) = sv.time;
+		PRVM_serverglobaledict(self) = PRVM_EDICT_TO_PROG(ent);
+		PRVM_serverglobalfloat(frametime) = PRVM_serverglobalfloat(input_timelength);
+		prog->ExecuteProgram(prog, PRVM_serverfunction(SV_RunClientCommand), "QC function SV_RunClientCommand is missing");
+		 
+		PRVM_serverglobalfloat(frametime) = sv.frametime;
+		return;
+	}
+
 	// call player physics, this needs the proper frametime
 	PRVM_serverglobalfloat(frametime) = sv.frametime;
 	SV_ClientThink();
@@ -3115,37 +3142,77 @@ void SV_Physics (void)
 // treat each object in turn
 //
 
-	// if force_retouch, relink all the entities
-	if (PRVM_serverglobalfloat(force_retouch) > 0)
-		for (i = 1, ent = PRVM_EDICT_NUM(i);i < prog->num_edicts;i++, ent = PRVM_NEXT_EDICT(ent))
-			if (!ent->priv.server->free)
-				SV_LinkEdict_TouchAreaGrid(ent); // force retouch even for stationary
+	// retouch all entities that requested it (or, if force_retouch is on, all of them)
+	for (i = 1, ent = PRVM_EDICT_NUM(i);i < prog->num_edicts;i++, ent = PRVM_NEXT_EDICT(ent))
+		if (!ent->priv.server->free && (PRVM_serverglobalfloat(force_retouch) > 0 || ((int)PRVM_clientedictfloat(ent, flags) & FL_ALWAYSTOUCH)))
+			SV_LinkEdict_TouchAreaGrid(ent); // force retouch even for stationary
 
-	if (sv_gameplayfix_consistentplayerprethink.integer)
+
+	// Reki: Added support for SV_RunClientCommand
+	if (PRVM_serverfunction(SV_RunClientCommand))
 	{
-		// run physics on the client entities in 3 stages
-		for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients;i <= svs.maxclients;i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
-			if (!ent->priv.server->free)
-				SV_Physics_ClientEntity_PreThink(ent);
+		for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients; i <= svs.maxclients; i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
+		{
+			if (ent->priv.server->free)
+				continue;
 
-		for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients;i <= svs.maxclients;i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
-			if (!ent->priv.server->free)
-				SV_Physics_ClientEntity(ent);
+			if (host_client->clmovement_inputtimeout > 0)
+				continue;
 
-		for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients;i <= svs.maxclients;i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
-			if (!ent->priv.server->free)
-				SV_Physics_ClientEntity_PostThink(ent);
+			if (!host_client->edict) // whoops, we don't have an edict (yet?)
+				continue;
+
+			usercmd_t *move = &host_client->cmd;
+			move->applied = true;
+
+			SV_ApplyClientMove();
+
+			PRVM_serverglobalfloat(servercommandframe) = move->sequence;
+			PRVM_serverglobalfloat(input_timelength) = sv.frametime;
+			PRVM_serverglobalfloat(input_buttons) = move->buttons;
+			PRVM_serverglobalfloat(input_impulse) = move->impulse;
+			VectorCopy(move->viewangles, PRVM_serverglobalvector(input_angles));
+			VectorSet(PRVM_serverglobalvector(input_movevalues), move->forwardmove, move->sidemove, move->upmove);
+
+			// make sure the velocity is sane (not a NaN)
+			SV_CheckVelocity(ent);
+
+			PRVM_serverglobalfloat(time) = sv.time;
+			PRVM_serverglobaledict(self) = PRVM_EDICT_TO_PROG(ent);
+			PRVM_serverglobalfloat(frametime) = PRVM_serverglobalfloat(input_timelength);
+			prog->ExecuteProgram(prog, PRVM_serverfunction(SV_RunClientCommand), "QC function SV_RunClientCommand is missing");
+
+			PRVM_serverglobalfloat(frametime) = sv.frametime;
+		}
 	}
 	else
 	{
-		// run physics on the client entities
-		for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients;i <= svs.maxclients;i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
+		if (sv_gameplayfix_consistentplayerprethink.integer)
 		{
-			if (!ent->priv.server->free)
+			// run physics on the client entities in 3 stages
+			for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients; i <= svs.maxclients; i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
+				if (!ent->priv.server->free)
+					SV_Physics_ClientEntity_PreThink(ent);
+
+			for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients; i <= svs.maxclients; i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
+				if (!ent->priv.server->free)
+					SV_Physics_ClientEntity(ent);
+
+			for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients; i <= svs.maxclients; i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
+				if (!ent->priv.server->free)
+					SV_Physics_ClientEntity_PostThink(ent);
+		}
+		else
+		{
+			// run physics on the client entities
+			for (i = 1, ent = PRVM_EDICT_NUM(i), host_client = svs.clients; i <= svs.maxclients; i++, ent = PRVM_NEXT_EDICT(ent), host_client++)
 			{
-				SV_Physics_ClientEntity_PreThink(ent);
-				SV_Physics_ClientEntity(ent);
-				SV_Physics_ClientEntity_PostThink(ent);
+				if (!ent->priv.server->free)
+				{
+					SV_Physics_ClientEntity_PreThink(ent);
+					SV_Physics_ClientEntity(ent);
+					SV_Physics_ClientEntity_PostThink(ent);
+				}
 			}
 		}
 	}

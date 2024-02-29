@@ -39,6 +39,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define CHANNELFLAG_LOCALSOUND	(1 << 2) // INTERNAL USE. Not settable by S_SetChannelFlag
 #define CHANNELFLAG_PAUSED	(1 << 3) // pause status
 #define CHANNELFLAG_FULLVOLUME	(1 << 4) // isn't affected by the general volume
+#define CHANNELFLAG_NOSPATIALIZE (1 << 5) // isn't affected by 3D panning, but volume still decreases with distance
+#define CHANNELFLAG_NETMASK (CHANNELFLAG_FORCELOOP | CHANNELFLAG_PAUSED | CHANNELFLAG_NOSPATIALIZE)
 
 // ====================================================================
 // Types and variables
@@ -97,6 +99,7 @@ sfx_t *S_FindName(const char *name);
 // S_StartSound returns the channel index, or -1 if an error occurred
 int S_StartSound (int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation);
 int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation, float startposition, int flags, float fspeed);
+int S_StartSound_StartPosition_Wrath(int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation, float startposition, int flags, float fspeed, float trapezoid_frac);
 qboolean S_LocalSound (const char *s);
 
 void S_StaticSound (sfx_t *sfx, vec3_t origin, float fvol, float attenuation);

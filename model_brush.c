@@ -38,7 +38,8 @@ cvar_t r_subdivisions_collision_tolerance = {0, "r_subdivisions_collision_tolera
 cvar_t r_subdivisions_collision_mintess = {0, "r_subdivisions_collision_mintess", "0", "minimum number of subdivisions (values above 0 will smooth curves that don't need it)"};
 cvar_t r_subdivisions_collision_maxtess = {0, "r_subdivisions_collision_maxtess", "1024", "maximum number of subdivisions (prevents curves beyond a certain detail level, limits smoothing)"};
 cvar_t r_subdivisions_collision_maxvertices = {0, "r_subdivisions_collision_maxvertices", "4225", "maximum vertices allowed per subdivided curve"};
-cvar_t r_trippy = {0, "r_trippy", "0", "easter egg"};
+cvar_t r_trippy = {0, "r_trippy", "0", "vertex warping effect, formerly an easter egg"};
+cvar_t r_trippy_scale = {0, "r_trippy_scale", "1", "r_trippy intensity"};
 cvar_t r_fxaa = {CVAR_SAVE, "r_fxaa", "0", "fast approximate anti aliasing"};
 cvar_t mod_noshader_default_offsetmapping = {CVAR_SAVE, "mod_noshader_default_offsetmapping", "1", "use offsetmapping by default on all surfaces that are not using q3 shader files"};
 cvar_t mod_obj_orientation = {0, "mod_obj_orientation", "1", "fix orientation of OBJ models to the usual conventions (if zero, use coordinates as is)"};
@@ -84,6 +85,7 @@ void Mod_BrushInit(void)
 	Cvar_RegisterVariable(&r_subdivisions_collision_maxtess);
 	Cvar_RegisterVariable(&r_subdivisions_collision_maxvertices);
 	Cvar_RegisterVariable(&r_trippy);
+	Cvar_RegisterVariable(&r_trippy_scale);
 	Cvar_RegisterVariable(&r_fxaa);
 	Cvar_RegisterVariable(&mod_noshader_default_offsetmapping);
 	Cvar_RegisterVariable(&mod_obj_orientation);
@@ -7145,6 +7147,19 @@ static int Mod_Q3BSP_SuperContentsFromNativeContents(dp_model_t *model, int nati
 		supercontents |= SUPERCONTENTS_BOTCLIP;
 	if (!(nativecontents & CONTENTSQ3_TRANSLUCENT))
 		supercontents |= SUPERCONTENTS_OPAQUE;
+	if (!(nativecontents & CONTENTSQ3_TRANSLUCENT))
+		supercontents |= SUPERCONTENTS_OPAQUE;
+	// Reki (May 19 2023): Wrath reserved contents for passthrough, this system is awful.
+	if ((nativecontents & CONTENTSWRATH_INTERACTCLIP))
+		supercontents |= SUPERCONTENTS_INTERACTCLIP;
+	if ((nativecontents & CONTENTSWRATH_UNUSED1))
+		supercontents |= SUPERCONTENTS_WRATHUNUSED1;
+	if ((nativecontents & CONTENTSWRATH_UNUSED2))
+		supercontents |= SUPERCONTENTS_WRATHUNUSED2;
+	if ((nativecontents & CONTENTSWRATH_UNUSED3))
+		supercontents |= SUPERCONTENTS_WRATHUNUSED3;
+	if ((nativecontents & CONTENTSWRATH_UNUSED4))
+		supercontents |= SUPERCONTENTS_WRATHUNUSED4;
 	return supercontents;
 }
 
@@ -7175,6 +7190,19 @@ static int Mod_Q3BSP_NativeContentsFromSuperContents(dp_model_t *model, int supe
 		nativecontents |= CONTENTSQ3_BOTCLIP;
 	if (!(supercontents & SUPERCONTENTS_OPAQUE))
 		nativecontents |= CONTENTSQ3_TRANSLUCENT;
+	// Reki (May 19 2023)
+	if ((supercontents & SUPERCONTENTS_INTERACTCLIP))
+		nativecontents |= CONTENTSWRATH_INTERACTCLIP;
+	if ((supercontents & SUPERCONTENTS_WRATHUNUSED1))
+		nativecontents |= CONTENTSWRATH_UNUSED1;
+	if ((supercontents & SUPERCONTENTS_WRATHUNUSED2))
+		nativecontents |= CONTENTSWRATH_UNUSED2;
+	if ((supercontents & SUPERCONTENTS_WRATHUNUSED3))
+		nativecontents |= CONTENTSWRATH_UNUSED3;
+	if ((supercontents & SUPERCONTENTS_WRATHUNUSED4))
+		nativecontents |= CONTENTSWRATH_UNUSED4;
+	if ((supercontents & SUPERCONTENTS_WRATHUNUSED3))
+		nativecontents |= CONTENTSWRATH_UNUSED3;
 	return nativecontents;
 }
 

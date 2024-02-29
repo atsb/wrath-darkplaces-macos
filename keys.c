@@ -1877,6 +1877,10 @@ Key_Event (int key, int ascii, qboolean down)
 			case key_menu:
 			case key_menu_grabbed:
 #ifdef CONFIG_MENU
+				q = MR_InputEvent(down ? 0 : 1, key, ascii);
+				if (q)
+					return;
+
 				MR_KeyEvent (key, ascii, down);
 #endif
 				break;
@@ -1885,8 +1889,15 @@ Key_Event (int key, int ascii, qboolean down)
 				// csqc has priority over toggle menu if it wants to (e.g. handling escape for UI stuff in-game.. :sick:)
 				q = CL_VM_InputEvent(down ? 0 : 1, key, ascii);
 #ifdef CONFIG_MENU
-				if (!q && down)
+				if (!q)
+				{
+					q = MR_InputEvent(down ? 0 : 1, key, ascii);
+					if (q)
+						return;
+					
+					if (down)
 					MR_ToggleMenu(1);
+				}
 #endif
 				break;
 
@@ -1899,7 +1910,7 @@ Key_Event (int key, int ascii, qboolean down)
 	// send function keydowns to interpreter no matter what mode is (unless the menu has specifically grabbed the keyboard, for rebinding keys)
 	// VorteX: Omnicide does bind F* keys
 	if (keydest != key_menu_grabbed)
-	if (key >= K_F1 && key <= K_F12 && gamemode != GAME_BLOODOMNICIDE)
+	if (key >= K_F1 && key <= K_F12)// && gamemode != GAME_BLOODOMNICIDE)
 	{
 		if (bind)
 		{
@@ -1916,7 +1927,6 @@ Key_Event (int key, int ascii, qboolean down)
 			} else if(bind[0] == '+' && !down && keydown[key] == 0)
 				Cbuf_AddText(va(vabuf, sizeof(vabuf), "-%s %i\n", bind + 1, key));
 		}
-		return;
 	}
 
 	// send input to console if it wants it
@@ -1956,13 +1966,18 @@ Key_Event (int key, int ascii, qboolean down)
 	{
 		if (gamemode == GAME_BLOODOMNICIDE) // menu controls key events
 #ifdef CONFIG_MENU
+		{
+			MR_InputEvent(down ? 0 : 1, key, ascii);
 			MR_KeyEvent(key, ascii, down);
+		}
 #else
 			{
 			}
 #endif
 		else
+		{
 			CL_Video_KeyEvent (key, ascii, keydown[key] != 0);
+		}
 		return;
 	}
 
@@ -1976,6 +1991,10 @@ Key_Event (int key, int ascii, qboolean down)
 		case key_menu:
 		case key_menu_grabbed:
 #ifdef CONFIG_MENU
+			q = MR_InputEvent(down ? 0 : 1, key, ascii);
+			if (q)
+				return;
+			
 			MR_KeyEvent (key, ascii, down);
 #endif
 			break;

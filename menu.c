@@ -5056,7 +5056,11 @@ void M_KeyEvent (int key, int ascii, qboolean downevent)
 		M_ModList_Key (key, ascii);
 		return;
 	}
+}
 
+static int M_InputEvent (int type, int key, int ascii)
+{
+	return false;
 }
 
 static void M_NewMap(void)
@@ -5337,6 +5341,25 @@ static void MP_KeyEvent (int key, int ascii, qboolean downevent)
 		prog->ExecuteProgram(prog, PRVM_menufunction(m_keyup),"m_keyup(float key, float ascii) required");
 }
 
+static int MP_InputEvent (int eventtype, float x, float y)
+{
+	prvm_prog_t *prog = MVM_prog;
+	qboolean r;
+	
+	if (!PRVM_menufunction(Menu_InputEvent))
+		r = false;
+	else
+	{
+		PRVM_G_FLOAT(OFS_PARM0) = eventtype;
+		PRVM_G_FLOAT(OFS_PARM1) = x; // key or x
+		PRVM_G_FLOAT(OFS_PARM2) = y; // ascii or y
+		prog->ExecuteProgram(prog, PRVM_menufunction(Menu_InputEvent), "QC function Menu_InputEvent is missing");
+		r = PRVM_G_FLOAT(OFS_RETURN) != 0;
+	}
+
+	return r;
+}
+
 static void MP_Draw (void)
 {
 	prvm_prog_t *prog = MVM_prog;
@@ -5461,6 +5484,7 @@ void (*MR_ToggleMenu) (int mode);
 void (*MR_Shutdown) (void);
 void (*MR_NewMap) (void);
 int (*MR_GetServerListEntryCategory) (const serverlist_entry_t *entry);
+int (*MR_InputEvent) (int type, float key, float ascii);
 
 void MR_SetRouting(qboolean forceold)
 {
@@ -5474,6 +5498,7 @@ void MR_SetRouting(qboolean forceold)
 		MR_Shutdown = M_Shutdown;
 		MR_NewMap = M_NewMap;
 		MR_GetServerListEntryCategory = M_GetServerListEntryCategory;
+		MR_InputEvent = M_InputEvent;
 		M_Init();
 	}
 	else
@@ -5485,6 +5510,7 @@ void MR_SetRouting(qboolean forceold)
 		MR_Shutdown = MP_Shutdown;
 		MR_NewMap = MP_NewMap;
 		MR_GetServerListEntryCategory = MP_GetServerListEntryCategory;
+		MR_InputEvent = MP_InputEvent;
 		MP_Init();
 	}
 }
@@ -5651,4 +5677,50 @@ void MR_Init(void)
 		MR_SetRouting (TRUE);
 	else
 		MR_SetRouting (FALSE);
+}
+
+// EXT_STEAM_REKI
+void MR_VM_Steam_AchievementValue(const char *achID, qboolean value)
+{
+	prvm_prog_t *prog = MVM_prog;
+
+	if (!prog->loaded)
+		return;
+
+	if (PRVM_menufunction(Menu_Steam_AchievementValue))
+	{
+		PRVM_G_INT(OFS_PARM0) = PRVM_SetTempString(prog, achID);
+		PRVM_G_FLOAT(OFS_PARM1) = (float)value;
+		prog->ExecuteProgram(prog, PRVM_menufunction(Menu_Steam_AchievementValue), "QC function Menu_Steam_AchievementValue is missing");
+	}
+}
+
+void MR_VM_Steam_StatValue(const char *statID, float value)
+{
+	prvm_prog_t *prog = MVM_prog;
+	
+	if (!prog->loaded)
+		return;
+
+	if (PRVM_menufunction(Menu_Steam_StatValue))
+	{
+		PRVM_G_INT(OFS_PARM0) = PRVM_SetTempString(prog, statID);
+		PRVM_G_FLOAT(OFS_PARM1) = value;
+		prog->ExecuteProgram(prog, PRVM_menufunction(Menu_Steam_StatValue), "QC function Menu_Steam_StatValue is missing");
+	}
+}
+
+void MR_VM_Controller_Type(int index, int type)
+{
+	prvm_prog_t *prog = MVM_prog;
+	
+	if (!prog->loaded)
+		return;
+
+	if (PRVM_menufunction(Controller_Type))
+	{
+		PRVM_G_FLOAT(OFS_PARM0) = (float)index;
+		PRVM_G_FLOAT(OFS_PARM1) = (float)type;
+		prog->ExecuteProgram(prog, PRVM_menufunction(Controller_Type), "QC function Controller_Type is missing");
+	}
 }

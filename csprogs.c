@@ -433,6 +433,7 @@ qboolean CSQC_AddRenderEdict(prvm_edict_t *ed, int edictnum)
 // 1 = keyup, key, character (EXT_CSQC)
 // 2 = mousemove relative, x, y (EXT_CSQC)
 // 3 = mousemove absolute, x, y (DP_CSQC)
+// 6 = joyaxis absolute, axis, value (FTE)
 qboolean CL_VM_InputEvent (int eventtype, float x, float y)
 {
 	prvm_prog_t *prog = CLVM_prog;
@@ -456,6 +457,43 @@ qboolean CL_VM_InputEvent (int eventtype, float x, float y)
 		}
 	CSQC_END
 	return r;
+}
+
+void CL_VM_Input_Frame(usercmd_t *cmd)
+{
+	prvm_prog_t *prog = CLVM_prog;
+
+	if (!cl.csqc_loaded)
+		return;
+
+	CSQC_BEGIN
+		if (PRVM_clientfunction(CSQC_Input_Frame))
+		{
+			PRVM_clientglobalfloat(time) = cl.time;
+			PRVM_clientglobaledict(self) = cl.csqc_server2csqcentitynumber[cl.playerentity];
+
+			PRVM_clientglobalfloat(input_timelength) = cmd->frametime;
+
+			VectorCopy(cmd->viewangles, PRVM_clientglobalvector(input_angles));
+			PRVM_clientglobalfloat(input_buttons) = cmd->buttons;
+			PRVM_clientglobalfloat(input_impulse) = cmd->impulse;
+
+			PRVM_clientglobalvector(input_movevalues)[0] = cmd->forwardmove;
+			PRVM_clientglobalvector(input_movevalues)[1] = cmd->sidemove;
+			PRVM_clientglobalvector(input_movevalues)[2] = cmd->upmove;
+
+			prog->ExecuteProgram(prog, PRVM_clientfunction(CSQC_Input_Frame), "QC function CSQC_Input_Frame is missing");
+
+			// take back modified values
+			cmd->forwardmove = PRVM_clientglobalvector(input_movevalues)[0];
+			cmd->sidemove = PRVM_clientglobalvector(input_movevalues)[1];
+			cmd->upmove = PRVM_clientglobalvector(input_movevalues)[2];
+
+			cmd->impulse = PRVM_clientglobalfloat(input_impulse);
+			cmd->buttons = PRVM_clientglobalfloat(input_buttons);
+			VectorCopy(PRVM_clientglobalvector(input_angles), cmd->viewangles);
+		}
+	CSQC_END
 }
 
 extern r_refdef_view_t csqc_original_r_refdef_view;
@@ -716,7 +754,7 @@ void CL_VM_UpdateShowingScoresState (int showingscores)
 		CSQC_END
 	}
 }
-qboolean CL_VM_Event_Sound(int sound_num, float volume, int channel, float attenuation, int ent, vec3_t pos, int flags, float speed)
+qboolean CL_VM_Event_Sound(int sound_num, float volume, int channel, float attenuation, int ent, vec3_t pos, int flags, float speed, float trapezoid_frac)
 {
 	prvm_prog_t *prog = CLVM_prog;
 	qboolean r = false;
@@ -796,6 +834,62 @@ static float CL_VM_Event (float event)		//[515]: needed ? I'd say "YES", but don
 	return r;
 }
 #endif
+void CL_VM_Steam_AchievementValue(const char *achID, qboolean value)
+{
+	prvm_prog_t *prog = CLVM_prog;
+
+	if (!cl.csqc_loaded)
+		return;
+
+	CSQC_BEGIN
+		if (PRVM_clientfunction(CSQC_Steam_AchievementValue))
+		{
+			PRVM_clientglobalfloat(time) = cl.time;
+			PRVM_clientglobaledict(self) = cl.csqc_server2csqcentitynumber[cl.playerentity];
+
+			PRVM_G_INT(OFS_PARM0) = PRVM_SetTempString(prog, achID);
+			PRVM_G_FLOAT(OFS_PARM1) = (float)value;
+			prog->ExecuteProgram(prog, PRVM_clientfunction(CSQC_Steam_AchievementValue), "QC function CSQC_Steam_AchievementValue is missing");
+		}
+	CSQC_END
+}
+
+void CL_VM_Steam_StatValue(const char *statID, float value)
+{
+	prvm_prog_t *prog = CLVM_prog;
+
+	if (!cl.csqc_loaded)
+		return;
+
+	CSQC_BEGIN
+		if (PRVM_clientfunction(CSQC_Steam_StatValue))
+		{
+			PRVM_clientglobalfloat(time) = cl.time;
+			PRVM_clientglobaledict(self) = cl.csqc_server2csqcentitynumber[cl.playerentity];
+
+			PRVM_G_INT(OFS_PARM0) = PRVM_SetTempString(prog, statID);
+			PRVM_G_FLOAT(OFS_PARM1) = value;
+			prog->ExecuteProgram(prog, PRVM_clientfunction(CSQC_Steam_StatValue), "QC function CSQC_Steam_StatValue is missing");
+		}
+	CSQC_END
+}
+
+void CL_VM_Controller_Type(int index, int type)
+{
+	prvm_prog_t *prog = CLVM_prog;
+
+	if (!cl.csqc_loaded)
+		return;
+
+	CSQC_BEGIN
+		if (PRVM_clientfunction(Controller_Type))
+		{
+			PRVM_G_FLOAT(OFS_PARM0) = (float)index;
+			PRVM_G_FLOAT(OFS_PARM1) = (float)type;
+			prog->ExecuteProgram(prog, PRVM_clientfunction(Controller_Type), "QC function Controller_Type is missing");
+		}
+	CSQC_END
+}
 
 void CSQC_ReadEntities (void)
 {

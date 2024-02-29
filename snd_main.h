@@ -88,6 +88,7 @@ typedef struct channel_s
 	int				entchannel;		// which channel id on the entity
 	vec3_t			origin;			// origin of sound effect
 	vec_t			distfade;		// distance multiplier (attenuation/clipK)
+	float			trap_frac;	// minimum distance before attenuation starts
 	void			*fetcher_data;	// Per-channel data for the sound fetching function
 	int				prologic_invert;// whether a sound is played on the surround channels in prologic
 	float			basespeed;		// playback rate multiplier for pitch variation

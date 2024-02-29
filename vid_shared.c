@@ -76,6 +76,7 @@ viddef_t vid;
 
 // AK FIXME -> input_dest
 qboolean in_client_mouse = true;
+qboolean in_menu_mouse = true;
 
 // AK where should it be placed ?
 float in_mouse_x, in_mouse_y;
@@ -187,7 +188,7 @@ cvar_t vid_sRGB_fallback = {CVAR_SAVE, "vid_sRGB_fallback", "0", "do an approxim
 cvar_t vid_touchscreen = {0, "vid_touchscreen", "0", "Use touchscreen-style input (no mouse grab, track mouse motion only while button is down, screen areas for mimicing joystick axes and buttons"};
 cvar_t vid_touchscreen_showkeyboard = {0, "vid_touchscreen_showkeyboard", "0", "shows the platform's screen keyboard for text entry, can be set by csqc or menu qc if it wants to receive text input, does nothing if the platform has no screen keyboard"};
 cvar_t vid_touchscreen_supportshowkeyboard = {CVAR_READONLY, "vid_touchscreen_supportshowkeyboard", "0", "indicates if the platform supports a virtual keyboard"};
-cvar_t vid_stick_mouse = {CVAR_SAVE, "vid_stick_mouse", "0", "have the mouse stuck in the center of the screen" };
+cvar_t vid_stick_mouse = {CVAR_SAVE, "vid_stick_mouse", "1", "have the mouse stuck in the center of the screen" };
 cvar_t vid_resizable = {CVAR_SAVE, "vid_resizable", "0", "0: window not resizable, 1: resizable, 2: window can be resized but the framebuffer isn't adjusted" };
 cvar_t vid_desktopfullscreen = {CVAR_SAVE, "vid_desktopfullscreen", "0", "force desktop resolution for fullscreen; also use some OS dependent tricks for better fullscreen integration"};
 
@@ -1357,26 +1358,26 @@ static int joybuttonkey[MAXJOYBUTTON][2] =
 
 static int joybuttonkey360[][2] =
 {
-	{K_X360_DPAD_UP, K_UPARROW},
-	{K_X360_DPAD_DOWN, K_DOWNARROW},
-	{K_X360_DPAD_LEFT, K_LEFTARROW},
-	{K_X360_DPAD_RIGHT, K_RIGHTARROW},
-	{K_X360_START, K_ESCAPE},
-	{K_X360_BACK, K_ESCAPE},
+	{K_X360_DPAD_UP, 0},
+	{K_X360_DPAD_DOWN, 0},
+	{K_X360_DPAD_LEFT, 0},
+	{K_X360_DPAD_RIGHT, 0},
+	{K_X360_START, 0},
+	{K_X360_BACK, 0},
 	{K_X360_LEFT_THUMB, 0},
 	{K_X360_RIGHT_THUMB, 0},
 	{K_X360_LEFT_SHOULDER, 0},
 	{K_X360_RIGHT_SHOULDER, 0},
-	{K_X360_A, K_ENTER},
-	{K_X360_B, K_ESCAPE},
+	{K_X360_A, 0},
+	{K_X360_B, 0},
 	{K_X360_X, 0},
 	{K_X360_Y, 0},
 	{K_X360_LEFT_TRIGGER, 0},
 	{K_X360_RIGHT_TRIGGER, 0},
-	{K_X360_LEFT_THUMB_DOWN, K_DOWNARROW},
-	{K_X360_LEFT_THUMB_UP, K_UPARROW},
-	{K_X360_LEFT_THUMB_LEFT, K_LEFTARROW},
-	{K_X360_LEFT_THUMB_RIGHT, K_RIGHTARROW},
+	{K_X360_LEFT_THUMB_DOWN, 0},
+	{K_X360_LEFT_THUMB_UP, 0},
+	{K_X360_LEFT_THUMB_LEFT, 0},
+	{K_X360_LEFT_THUMB_RIGHT, 0},
 	{K_X360_RIGHT_THUMB_DOWN, 0},
 	{K_X360_RIGHT_THUMB_UP, 0},
 	{K_X360_RIGHT_THUMB_LEFT, 0},
@@ -1384,6 +1385,7 @@ static int joybuttonkey360[][2] =
 };
 
 double vid_joybuttontimer[MAXJOYBUTTON];
+float vid_joyaxislastevent[MAXJOYAXIS];
 void VID_ApplyJoyState(vid_joystate_t *joystate)
 {
 	int j;
@@ -1406,8 +1408,8 @@ void VID_ApplyJoyState(vid_joystate_t *joystate)
 		cl.cmd.forwardmove += VID_JoyState_GetAxis(joystate, joy_x360_axisforward.integer, joy_x360_sensitivityforward.value, joy_x360_deadzoneforward.value) * cl_forwardspeed.value;
 		cl.cmd.sidemove    += VID_JoyState_GetAxis(joystate, joy_x360_axisside.integer, joy_x360_sensitivityside.value, joy_x360_deadzoneside.value) * cl_sidespeed.value;
 		cl.cmd.upmove      += VID_JoyState_GetAxis(joystate, joy_x360_axisup.integer, joy_x360_sensitivityup.value, joy_x360_deadzoneup.value) * cl_upspeed.value;
-		cl.viewangles[0]   += VID_JoyState_GetAxis(joystate, joy_x360_axispitch.integer, joy_x360_sensitivitypitch.value, joy_x360_deadzonepitch.value) * cl.realframetime * cl_pitchspeed.value;
-		cl.viewangles[1]   += VID_JoyState_GetAxis(joystate, joy_x360_axisyaw.integer, joy_x360_sensitivityyaw.value, joy_x360_deadzoneyaw.value) * cl.realframetime * cl_yawspeed.value;
+		cl.viewangles[0]   += VID_JoyState_GetAxis(joystate, joy_x360_axispitch.integer, joy_x360_sensitivitypitch.value, joy_x360_deadzonepitch.value) * cl.realframetime * cl.sensitivityscale * cl.viewzoom * 180;
+		cl.viewangles[1]   += VID_JoyState_GetAxis(joystate, joy_x360_axisyaw.integer, joy_x360_sensitivityyaw.value, joy_x360_deadzoneyaw.value) * cl.realframetime * cl.sensitivityscale * cl.viewzoom * 180;
 		//cl.viewangles[2]   += VID_JoyState_GetAxis(joystate, joy_x360_axisroll.integer, joy_x360_sensitivityroll.value, joy_x360_deadzoneroll.value) * cl.realframetime * cl_rollspeed.value;
 	}
 	else
@@ -1420,9 +1422,25 @@ void VID_ApplyJoyState(vid_joystate_t *joystate)
 		cl.cmd.forwardmove += VID_JoyState_GetAxis(joystate, joy_axisforward.integer, joy_sensitivityforward.value, joy_deadzoneforward.value) * cl_forwardspeed.value;
 		cl.cmd.sidemove    += VID_JoyState_GetAxis(joystate, joy_axisside.integer, joy_sensitivityside.value, joy_deadzoneside.value) * cl_sidespeed.value;
 		cl.cmd.upmove      += VID_JoyState_GetAxis(joystate, joy_axisup.integer, joy_sensitivityup.value, joy_deadzoneup.value) * cl_upspeed.value;
-		cl.viewangles[0]   += VID_JoyState_GetAxis(joystate, joy_axispitch.integer, joy_sensitivitypitch.value, joy_deadzonepitch.value) * cl.realframetime * cl_pitchspeed.value;
-		cl.viewangles[1]   += VID_JoyState_GetAxis(joystate, joy_axisyaw.integer, joy_sensitivityyaw.value, joy_deadzoneyaw.value) * cl.realframetime * cl_yawspeed.value;
+		cl.viewangles[0]   += VID_JoyState_GetAxis(joystate, joy_axispitch.integer, joy_sensitivitypitch.value, joy_deadzonepitch.value) * cl.realframetime * cl.sensitivityscale * cl.viewzoom * 180;
+		cl.viewangles[1]   += VID_JoyState_GetAxis(joystate, joy_axisyaw.integer, joy_sensitivityyaw.value, joy_deadzoneyaw.value) * cl.realframetime * cl.sensitivityscale * cl.viewzoom * 180;
 		//cl.viewangles[2]   += VID_JoyState_GetAxis(joystate, joy_axisroll.integer, joy_sensitivityroll.value, joy_deadzoneroll.value) * cl.realframetime * cl_rollspeed.value;
+	}
+
+	for(j = 0; j < MAXJOYAXIS; j++)
+	{
+		float axisval = VID_JoyState_GetAxis(joystate, j, 1, 0.1);
+		if (axisval == vid_joyaxislastevent[j])
+			continue;
+	
+		vid_joyaxislastevent[j] = axisval;
+		if (cl.csqc_loaded)
+		{
+			CL_VM_InputEvent(6, (float)j, axisval);
+		}
+		#ifdef CONFIG_MENU
+		MR_InputEvent(6, (float)j, axisval);
+		#endif
 	}
 
 	vid_joystate = *joystate;
@@ -1430,7 +1448,7 @@ void VID_ApplyJoyState(vid_joystate_t *joystate)
 
 int VID_Shared_SetJoystick(int index)
 {
-#ifdef WIN32
+#if defined(WIN32)
 	int i;
 	int xinputcount = 0;
 	int xinputindex = -1;
@@ -1944,6 +1962,7 @@ void VID_Restart_f(void)
 {
 	char vabuf[1024];
 	char vabuf2[1024];
+	prvm_prog_t *prog;
 	// don't crash if video hasn't started yet
 	if (vid_commandlinecheck)
 		return;
@@ -1967,6 +1986,27 @@ void VID_Restart_f(void)
 			Sys_Error("Unable to restore to last working video mode");
 	}
 	VID_OpenSystems();
+
+	prog = CLVM_prog;
+	if (prog)
+	{
+		if (PRVM_clientfunction(CSQC_RendererRestarted))
+		{
+			Con_DPrint("Calling CSQC_RendererRestarted\n");
+			prog->ExecuteProgram(prog, PRVM_clientfunction(CSQC_RendererRestarted), "QC function CSQC_RendererRestarted is missing");
+		}
+	}
+#ifdef CONFIG_MENU
+	prog = MVM_prog;
+	if (prog)
+	{
+		if (PRVM_menufunction(Menu_RendererRestarted))
+		{
+			Con_DPrint("Calling Menu_RendererRestarted\n");
+			prog->ExecuteProgram(prog, PRVM_menufunction(Menu_RendererRestarted), "QC function Menu_RendererRestarted is missing");
+		}
+	}
+#endif
 }
 
 const char *vidfallbacks[][2] =

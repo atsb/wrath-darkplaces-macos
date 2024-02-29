@@ -196,8 +196,9 @@ typedef enum r_stat_e
 r_stat_t;
 
 // flags for rtlight rendering
-#define LIGHTFLAG_NORMALMODE 1
-#define LIGHTFLAG_REALTIMEMODE 2
+#define LIGHTFLAG_NORMALMODE	1
+#define LIGHTFLAG_REALTIMEMODE	2
+#define LIGHTFLAG_DISTANCEFADE	64
 
 typedef struct tridecal_s
 {
@@ -837,6 +838,7 @@ typedef struct client_static_s
 	// protocol version of the server we're connected to
 	// (kept outside client_state_t because it's used between levels)
 	protocolversion_t protocol;
+	unsigned long protocolversion; // Reki (April 13 2023): Subversion for network enhancements
 
 #define MAX_RCONS 16
 	int rcon_trying;
@@ -1443,6 +1445,9 @@ typedef struct client_state_s
 	vec3_t csqc_viewangles;
 	vec3_t csqc_vieworiginfromengine;
 	vec3_t csqc_viewanglesfromengine;
+	qboolean csqc_viewmodel_overwrite;
+	vec3_t csqc_viewmodel_origin;
+	vec3_t csqc_viewmodel_angles;
 	matrix4x4_t csqc_viewmodelmatrixfromengine;
 	qboolean csqc_usecsqclistener;
 	matrix4x4_t csqc_listenermatrix;
@@ -1961,6 +1966,8 @@ typedef struct r_refdef_s
 	char fogheighttexturename[64]; // detects changes to active fog height texture
 
 	int draw2dstage; // 0 = no, 1 = yes, other value = needs setting up again
+
+	float saturation; // multiplied by r_glsl_saturation before being passed to the shader
 
 	// true during envmap command capture
 	qboolean envmap;

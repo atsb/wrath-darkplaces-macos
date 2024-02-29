@@ -86,6 +86,7 @@ OBJ_COMMON= \
 	cl_parse.o \
 	cl_particles.o \
 	cl_screen.o \
+	cl_steam.o \
 	cl_video.o \
 	clvm_cmds.o \
 	cmd.o \

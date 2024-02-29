@@ -6,6 +6,7 @@
 #include "r_shadow.h"
 #include "jpeg.h"
 #include "image.h"
+#include "cl_steam.h"
 
 //============================================================================
 // Client
@@ -175,10 +176,11 @@ static void VM_CL_sound (prvm_prog_t *prog)
 	float				attenuation;
 	float pitchchange;
 	float				startposition;
+	float				trapezoid;
 	int flags;
 	vec3_t				org;
 
-	VM_SAFEPARMCOUNTRANGE(5, 7, VM_CL_sound);
+	VM_SAFEPARMCOUNTRANGE(5, 8, VM_CL_sound);
 
 	entity = PRVM_G_EDICT(OFS_PARM0);
 	channel = (int)PRVM_G_FLOAT(OFS_PARM1);
@@ -208,8 +210,13 @@ static void VM_CL_sound (prvm_prog_t *prog)
 	else
 	{
 		// LordHavoc: we only let the qc set certain flags, others are off-limits
-		flags = (int)PRVM_G_FLOAT(OFS_PARM6) & (CHANNELFLAG_RELIABLE | CHANNELFLAG_FORCELOOP | CHANNELFLAG_PAUSED);
+		flags = (int)PRVM_G_FLOAT(OFS_PARM6) & (CHANNELFLAG_RELIABLE | CHANNELFLAG_NETMASK);
 	}
+
+	if (prog->argc < 8)
+		trapezoid = 0;
+	else
+		trapezoid = bound(0, PRVM_G_FLOAT(OFS_PARM7), 1);
 
 	// sound_starttime exists instead of sound_startposition because in a
 	// networking sense you might not know when something is being received,
@@ -229,7 +236,7 @@ static void VM_CL_sound (prvm_prog_t *prog)
 	}
 
 	CL_VM_GetEntitySoundOrigin(MAX_EDICTS + PRVM_NUM_FOR_EDICT(entity), org);
-	S_StartSound_StartPosition_Flags(MAX_EDICTS + PRVM_NUM_FOR_EDICT(entity), channel, S_FindName(sample), org, volume, attenuation, startposition, flags, pitchchange > 0.0f ? pitchchange * 0.01f : 1.0f);
+	S_StartSound_StartPosition_Wrath(MAX_EDICTS + PRVM_NUM_FOR_EDICT(entity), channel, S_FindName(sample), org, volume, attenuation, startposition, flags, pitchchange > 0.0f ? pitchchange * 0.01f : 1.0f, trapezoid);
 }
 
 // #483 void(vector origin, string sample, float volume, float attenuation) pointsound
@@ -741,9 +748,13 @@ static void VM_CL_R_ClearScene (prvm_prog_t *prog)
 	r_refdef.view = csqc_original_r_refdef_view;
 	VectorCopy(cl.csqc_vieworiginfromengine, cl.csqc_vieworigin);
 	VectorCopy(cl.csqc_viewanglesfromengine, cl.csqc_viewangles);
+	cl.csqc_viewmodel_overwrite = false;
+	VectorClear(cl.csqc_viewmodel_origin);
+	VectorClear(cl.csqc_viewmodel_angles);
 	cl.csqc_vidvars.drawworld = r_drawworld.integer != 0;
 	cl.csqc_vidvars.drawenginesbar = false;
 	cl.csqc_vidvars.drawcrosshair = false;
+	r_refdef.saturation = 1;
 	CSQC_R_RecalcView();
 }
 
@@ -770,11 +781,11 @@ static void VM_CL_R_AddEntities (prvm_prog_t *prog)
 		if(ed->priv.required->free)
 			continue;
 		// note that for RF_USEAXIS entities, Predraw sets v_forward/v_right/v_up globals that are read by CSQC_AddRenderEdict
-		CSQC_Predraw(ed);
 		if(ed->priv.required->free)
 			continue;
 		if(!((int)PRVM_clientedictfloat(ed, drawmask) & drawmask))
 			continue;
+		CSQC_Predraw(ed);
 		CSQC_AddRenderEdict(ed, i);
 	}
 
@@ -933,6 +944,33 @@ static void VM_CL_R_SetView (prvm_prog_t *prog)
 		case VF_MINFPS_QUALITY:
 			PRVM_G_FLOAT(OFS_RETURN) = r_refdef.view.quality;
 			break;
+		case VF_SATURATION:
+			PRVM_G_FLOAT(OFS_RETURN) = r_refdef.saturation;
+			break;
+		case VF_VIEWMODEL_ORIGIN:
+			VectorCopy(cl.csqc_viewmodel_origin, PRVM_G_VECTOR(OFS_RETURN));
+			break;
+		case VF_VIEWMODEL_ORIGIN_X:
+			PRVM_G_FLOAT(OFS_RETURN) = cl.csqc_viewmodel_origin[0];
+			break;
+		case VF_VIEWMODEL_ORIGIN_Y:
+			PRVM_G_FLOAT(OFS_RETURN) = cl.csqc_viewmodel_origin[1];
+			break;
+		case VF_VIEWMODEL_ORIGIN_Z:
+			PRVM_G_FLOAT(OFS_RETURN) = cl.csqc_viewmodel_origin[2];
+			break;
+		case VF_VIEWMODEL_ANGLES:
+			VectorCopy(cl.csqc_viewmodel_angles, PRVM_G_VECTOR(OFS_RETURN));
+			break;
+		case VF_VIEWMODEL_ANGLES_X:
+			PRVM_G_FLOAT(OFS_RETURN) = cl.csqc_viewmodel_angles[0];
+			break;
+		case VF_VIEWMODEL_ANGLES_Y:
+			PRVM_G_FLOAT(OFS_RETURN) = cl.csqc_viewmodel_angles[1];
+			break;
+		case VF_VIEWMODEL_ANGLES_Z:
+			PRVM_G_FLOAT(OFS_RETURN) = cl.csqc_viewmodel_angles[2];
+			break;
 		default:
 			PRVM_G_FLOAT(OFS_RETURN) = 0;
 			VM_Warning(prog, "VM_CL_R_GetView : unknown parm %i\n", c);
@@ -1086,6 +1124,49 @@ static void VM_CL_R_SetView (prvm_prog_t *prog)
 	case VF_MINFPS_QUALITY:
 		r_refdef.view.quality = k;
 		break;
+	case VF_SATURATION:
+		r_refdef.saturation = k;
+		break;
+	case VF_VIEWMODEL_ORIGIN:
+		cl.csqc_viewmodel_overwrite = true;
+		VectorCopy(f, cl.csqc_viewmodel_origin);
+		CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ORIGIN_X:
+		cl.csqc_viewmodel_overwrite = true;
+		cl.csqc_viewmodel_origin[0] = k;
+		CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ORIGIN_Y:
+		cl.csqc_viewmodel_overwrite = true;
+		cl.csqc_viewmodel_origin[1] = k;
+		CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ORIGIN_Z:
+		cl.csqc_viewmodel_overwrite = true;
+		cl.csqc_viewmodel_origin[2] = k;
+		CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ANGLES:
+		cl.csqc_viewmodel_overwrite = true;
+		VectorCopy(f, cl.csqc_viewmodel_angles);
+		CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ANGLES_X:
+		cl.csqc_viewmodel_overwrite = true;
+		cl.csqc_viewmodel_angles[0] = k;
+		CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ANGLES_Y:
+		cl.csqc_viewmodel_overwrite = true;
+		cl.csqc_viewmodel_angles[1] = k;
+			CSQC_R_RecalcView();
+		break;
+	case VF_VIEWMODEL_ANGLES_Z:
+		cl.csqc_viewmodel_overwrite = true;
+		cl.csqc_viewmodel_angles[2] = k;
+			CSQC_R_RecalcView();
+		break;
 	default:
 		PRVM_G_FLOAT(OFS_RETURN) = 0;
 		VM_Warning(prog, "VM_CL_R_SetView : unknown parm %i\n", c);
@@ -1142,7 +1223,7 @@ static void VM_CL_R_AddDynamicLight (prvm_prog_t *prog)
 	VectorScale(PRVM_clientglobalvector(v_up), radius, up);
 	Matrix4x4_FromVectors(&matrix, forward, left, up, org);
 
-	R_RTLight_Update(&r_refdef.scene.templights[r_refdef.scene.numlights], false, &matrix, col, style, cubemapname, castshadow, coronaintensity, coronasizescale, ambientscale, diffusescale, specularscale, LIGHTFLAG_NORMALMODE | LIGHTFLAG_REALTIMEMODE);
+	R_RTLight_Update(&r_refdef.scene.templights[r_refdef.scene.numlights], false, &matrix, col, style, cubemapname, castshadow, coronaintensity, coronasizescale, ambientscale, diffusescale, specularscale, LIGHTFLAG_NORMALMODE | LIGHTFLAG_REALTIMEMODE | (pflags & PFLAGS_LODFADE ? LIGHTFLAG_DISTANCEFADE : 0));
 	r_refdef.scene.lights[r_refdef.scene.numlights] = &r_refdef.scene.templights[r_refdef.scene.numlights];r_refdef.scene.numlights++;
 	t = Sys_DirtyTime() - t;if (t < 0 || t >= 1800) t = 0;
 	prog->functions[PRVM_clientfunction(CSQC_UpdateView)].totaltime -= t;
@@ -1460,7 +1541,13 @@ static void VM_CL_getinputstate (prvm_prog_t *prog)
 			PRVM_clientglobalvector(input_movevalues)[0] = cl.movecmd[i].forwardmove;
 			PRVM_clientglobalvector(input_movevalues)[1] = cl.movecmd[i].sidemove;
 			PRVM_clientglobalvector(input_movevalues)[2] = cl.movecmd[i].upmove;
-			PRVM_clientglobalfloat(input_timelength) = cl.movecmd[i].frametime;
+			
+			if (sv.protocol == PROTOCOL_WRATH && i > 0)
+				PRVM_clientglobalfloat(input_timelength) = (float)cl.movecmd[i].msec / 1000;
+			else
+				PRVM_clientglobalfloat(input_timelength) = cl.movecmd[i].frametime;
+
+			PRVM_clientglobalfloat(input_impulse) = cl.movecmd[i].impulse;
 			// this probably shouldn't be here
 			if(cl.movecmd[i].crouch)
 			{
@@ -4328,6 +4415,114 @@ static void VM_CL_V_CalcRefdef(prvm_prog_t *prog)
 	CSQC_R_RecalcView();
 }
 
+static void VM_CL_stachievement_unlock(prvm_prog_t *prog)
+{
+	const char *achID;
+	VM_SAFEPARMCOUNT(1, VM_CL_stachievement_unlock);
+	achID = PRVM_G_STRING(OFS_PARM0);
+
+	Steam_AchievementUnlock(achID);
+}
+
+static void VM_CL_stachievement_query(prvm_prog_t *prog)
+{
+	const char *achID;
+	VM_SAFEPARMCOUNT(1, VM_CL_stachievement_query);
+	achID = PRVM_G_STRING(OFS_PARM0);
+
+	Steam_AchievementQuery(achID);
+}
+
+static void VM_CL_ststat_setvalue(prvm_prog_t *prog)
+{
+	const char *statID;
+	float statValue;
+	VM_SAFEPARMCOUNT(2, VM_CL_ststat_setvalue);
+	statID = PRVM_G_STRING(OFS_PARM0);
+	statValue = PRVM_G_FLOAT(OFS_PARM1);
+
+	Steam_StatSet(statID, statValue);
+}
+
+static void VM_CL_ststat_increment(prvm_prog_t *prog)
+{
+	const char *statID;
+	float statValue;
+	VM_SAFEPARMCOUNT(2, VM_CL_ststat_increment);
+	statID = PRVM_G_STRING(OFS_PARM0);
+	statValue = PRVM_G_FLOAT(OFS_PARM1);
+
+	Steam_StatIncrement(statID, statValue);
+}
+
+static void VM_CL_ststat_query(prvm_prog_t *prog)
+{
+	const char *statID;
+	VM_SAFEPARMCOUNT(1, VM_CL_ststat_query);
+	statID = PRVM_G_STRING(OFS_PARM0);
+
+	Steam_StatQuery(statID);
+}
+
+static void VM_CL_stachievement_register(prvm_prog_t *prog)
+{
+	const char *achID;
+	VM_SAFEPARMCOUNT(1, VM_CL_stachievement_register);
+	achID = PRVM_G_STRING(OFS_PARM0);
+
+	Steam_RegisterAchievement(achID);
+}
+
+static void VM_CL_ststat_register(prvm_prog_t *prog)
+{
+	const char *statID;
+	int statType;
+	VM_SAFEPARMCOUNT(2, VM_CL_ststat_register);
+	statID = PRVM_G_STRING(OFS_PARM0);
+	statType = (int)PRVM_G_FLOAT(OFS_PARM1);
+
+	Steam_RegisterStat(statID, statType);
+}
+
+// EXT_CONTROLLER_REKI
+static void VM_CL_controller_query(prvm_prog_t *prog)
+{
+	int deviceIndex;
+	VM_SAFEPARMCOUNT(1, VM_CL_controller_query);
+	deviceIndex = (int)PRVM_G_FLOAT(OFS_PARM0);
+
+	Controller_Poll(deviceIndex);
+}
+
+static void VM_CL_controller_rumble(prvm_prog_t *prog)
+{
+	float lowfreq, highfreq;
+	int index, msec;
+
+	VM_SAFEPARMCOUNT(4, VM_CL_ststat_register);
+	index = (int)PRVM_G_FLOAT(OFS_PARM0);
+	lowfreq = PRVM_G_FLOAT(OFS_PARM1);
+	highfreq = PRVM_G_FLOAT(OFS_PARM2);
+	msec = (int)PRVM_G_FLOAT(OFS_PARM3);
+
+	VID_ControllerRumble(index, lowfreq, highfreq, msec);
+}
+
+static void VM_CL_controller_rumbletriggers(prvm_prog_t *prog)
+{
+	float lefttrigger, righttrigger;
+	int index, msec;
+
+	VM_SAFEPARMCOUNT(4, VM_CL_ststat_register);
+	index = (int)PRVM_G_FLOAT(OFS_PARM0);
+	lefttrigger = PRVM_G_FLOAT(OFS_PARM1);
+	righttrigger = PRVM_G_FLOAT(OFS_PARM2);
+	msec = (int)PRVM_G_FLOAT(OFS_PARM3);
+
+	VID_ControllerRumbleTriggers(index, lefttrigger, righttrigger, msec);
+}
+//
+
 //============================================================================
 
 // To create a almost working builtin file from this replace:
@@ -5073,19 +5268,19 @@ NULL,						// #726
 NULL,						// #727
 NULL,						// #728
 NULL,						// #729
-NULL,						// #730
-NULL,						// #731
-NULL,						// #732
-NULL,						// #733
-NULL,						// #734
-NULL,						// #735
-NULL,						// #736
-NULL,						// #737
+VM_CL_stachievement_unlock,	// #730 void(string achievement_id) stachievement_unlock (EXT_STEAM_REKI)
+VM_CL_stachievement_query,	// #731 void(string achievement_id) stachievement_query (EXT_STEAM_REKI)
+VM_CL_ststat_setvalue,		// #732 void(string stat_id, float value) ststat_setvalue (EXT_STEAM_REKI)
+VM_CL_ststat_increment,		// #733 void(string stat_id, float value) ststat_increment (EXT_STEAM_REKI)
+VM_CL_ststat_query,			// #734 void(string stat_id) ststat_query (EXT_STEAM_REKI)
+VM_CL_stachievement_register,// #735 void(string achievement_id) stachievement_register (EXT_STEAM_REKI)
+VM_CL_ststat_register,		// #736 void(string stat_id) ststat_register (EXT_STEAM_REKI)
+NULL,	    				// #737
 NULL,						// #738
 NULL,						// #739
-NULL,						// #740
-NULL,						// #741
-NULL,						// #742
+VM_CL_controller_query,	    // #740 void(float index) controller_query (EXT_CONTROLLER_REKI)
+VM_CL_controller_rumble,	// #741 void(float index, float lowmult, float highmult, float msec) controller_rumble (EXT_CONTROLLER_REKI)
+VM_CL_controller_rumbletriggers,// #742 void(float index, float leftmult, float rightmult, float msec) controller_rumbletriggers (EXT_CONTROLLER_REKI)
 NULL,						// #743
 NULL,						// #744
 NULL,						// #745

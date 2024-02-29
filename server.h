@@ -91,6 +91,9 @@ typedef struct server_s
 
 	double frametime;
 
+	// Reki (April 17 2023): timescale controlled by SSQC, to do slowmo without cvar abuse
+	float timescale;
+
 	// used by PF_checkclient
 	int lastcheck;
 	double lastchecktime;
@@ -198,6 +201,9 @@ typedef struct client_s
 	qboolean begun;
 	/// 1 = send svc_serverinfo and advance to 2, 2 doesn't send, then advances to 0 (allowing unlimited sending) when prespawn is received
 	int sendsignon;
+
+	/// Reki (April 13 2023) protocol subversion
+	unsigned long protocolversion;
 
 	/// requested rate in bytes per second
 	int rate;
@@ -376,6 +382,7 @@ typedef struct client_s
 #define	FL_WATERJUMP			2048	///< player jumping out of water
 #define	FL_JUMPRELEASED			4096	///< for jump debouncing
 #define FL_IGNOREINPUT			8192	///< ignores client input while set
+#define FL_ALWAYSTOUCH			16384	///< per-entity force_retouch
 
 #define	SPAWNFLAG_NOT_EASY			256
 #define	SPAWNFLAG_NOT_MEDIUM		512
@@ -515,7 +522,8 @@ void SV_Init (void);
 
 void SV_StartParticle (vec3_t org, vec3_t dir, int color, int count);
 void SV_StartEffect (vec3_t org, int modelindex, int startframe, int framecount, int framerate);
-void SV_StartSound (prvm_edict_t *entity, int channel, const char *sample, int volume, float attenuation, qboolean reliable, float speed);
+void SV_StartSound (prvm_edict_t *entity, int channel, const char *sample, int volume, float attenuation, int flags, float speed);
+void SV_StartSound_Advanced(prvm_edict_t *entity, int channel, const char *sample, int volume, float attenuation, int flags, float speed, float trapezoid_frac);
 void SV_StartPointSound (vec3_t origin, const char *sample, int volume, float attenuation, float speed);
 
 void SV_ConnectClient (int clientnum, netconn_t *netconnection);

@@ -58,6 +58,17 @@
 #define VF_MAINVIEW		400 //(float)
 #define VF_MINFPS_QUALITY	401 //(float)
 
+#define VF_SATURATION		450 //(float)
+
+#define VF_VIEWMODEL_ORIGIN		452
+#define VF_VIEWMODEL_ORIGIN_X	453
+#define VF_VIEWMODEL_ORIGIN_Y	454
+#define VF_VIEWMODEL_ORIGIN_Z	455
+#define VF_VIEWMODEL_ANGLES		456
+#define VF_VIEWMODEL_ANGLES_X	457
+#define VF_VIEWMODEL_ANGLES_Y	458
+#define VF_VIEWMODEL_ANGLES_Z	459
+
 #define RF_VIEWMODEL		1	// The entity is never drawn in mirrors. In engines with realtime lighting, it casts no shadows.
 #define RF_EXTERNALMODEL	2	// The entity is appears in mirrors but not in the normal view. It does still cast shadows in engines with realtime lighting.
 #define RF_DEPTHHACK		4	// The entity appears closer to the view than normal, either by scaling it wierdly or by just using a depthrange. This will usually be found in conjunction with RF_VIEWMODEL
@@ -90,10 +101,14 @@ void CL_VM_ShutDown(void);
 void CL_VM_UpdateIntermissionState(int intermission);
 void CL_VM_UpdateShowingScoresState(int showingscores);
 qboolean CL_VM_InputEvent(int eventtype, float x, float y);
+void CL_VM_Input_Frame(usercmd_t *cmd);
+void CL_VM_Steam_AchievementValue(const char *achID, qboolean value);
+void CL_VM_Steam_StatValue(const char *statID, float value);
+void CL_VM_Controller_Type(int index, int type);
 qboolean CL_VM_ConsoleCommand(const char *cmd);
 void CL_VM_UpdateDmgGlobals(int dmg_take, int dmg_save, vec3_t dmg_origin);
 void CL_VM_UpdateIntermissionState(int intermission);
-qboolean CL_VM_Event_Sound(int sound_num, float volume, int channel, float attenuation, int ent, vec3_t pos, int flags, float speed);
+qboolean CL_VM_Event_Sound(int sound_num, float volume, int channel, float attenuation, int ent, vec3_t pos, int flags, float speed, float trapezoid_frac);
 qboolean CL_VM_Parse_TempEntity(void);
 void CL_VM_Parse_StuffCmd(const char *msg);
 void CL_VM_Parse_CenterPrint(const char *msg);

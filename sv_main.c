@@ -133,7 +133,7 @@ cvar_t sv_maxvelocity = {CVAR_NOTIFY, "sv_maxvelocity","2000", "universal speed 
 cvar_t sv_nostep = {CVAR_NOTIFY, "sv_nostep","0", "prevents MOVETYPE_STEP entities (monsters) from moving"};
 cvar_t sv_playerphysicsqc = {CVAR_NOTIFY, "sv_playerphysicsqc", "1", "enables QuakeC function to override player physics"};
 cvar_t sv_progs = {0, "sv_progs", "progs.dat", "selects which quakec progs.dat file to run" };
-cvar_t sv_protocolname = {0, "sv_protocolname", "DP7", "selects network protocol to host for (values include QUAKE, QUAKEDP, NEHAHRAMOVIE, DP1 and up)"};
+cvar_t sv_protocolname = {0, "sv_protocolname", "WRATH", "selects network protocol to host for (values include WRATH, QUAKE, QUAKEDP, NEHAHRAMOVIE, DP1 and up)"};
 cvar_t sv_random_seed = {0, "sv_random_seed", "", "random seed; when set, on every map start this random seed is used to initialize the random number generator. Don't touch it unless for benchmarking or debugging"};
 cvar_t sv_ratelimitlocalplayer = {0, "sv_ratelimitlocalplayer", "0", "whether to apply rate limiting to the local player in a listen server (only useful for testing)"};
 cvar_t sv_sound_land = {0, "sv_sound_land", "demon/dland2.wav", "sound to play when MOVETYPE_STEP entity hits the ground at high speed (empty cvar disables the sound)"};
@@ -716,11 +716,13 @@ Larger attenuations will drop off.  (max 4 attenuation)
 
 ==================
 */
-void SV_StartSound (prvm_edict_t *entity, int channel, const char *sample, int volume, float attenuation, qboolean reliable, float speed)
+void SV_StartSound (prvm_edict_t *entity, int channel, const char *sample, int volume, float attenuation, int flags, float speed)
 {
 	prvm_prog_t *prog = SVVM_prog;
 	sizebuf_t *dest;
 	int sound_num, field_mask, i, ent, speed4000;
+	const qboolean reliable = flags & CHANNELFLAG_RELIABLE;
+	const int netflags = flags & CHANNELFLAG_NETMASK;
 
 	dest = (reliable ? &sv.reliable_datagram : &sv.datagram);
 
@@ -766,6 +768,8 @@ void SV_StartSound (prvm_edict_t *entity, int channel, const char *sample, int v
 		field_mask |= SND_LARGEENTITY;
 	if (sound_num >= 256)
 		field_mask |= SND_LARGESOUND;
+	if (netflags && (sv.protocol <= PROTOCOL_DARKPLACES1))
+		field_mask |= SND_FLAGS;
 
 // directed messages go only to the entity they are targeted on
 	MSG_WriteByte (dest, svc_sound);
@@ -787,11 +791,107 @@ void SV_StartSound (prvm_edict_t *entity, int channel, const char *sample, int v
 		MSG_WriteShort (dest, sound_num);
 	else
 		MSG_WriteByte (dest, sound_num);
+	if (field_mask & SND_FLAGS)
+		MSG_WriteByte (dest, netflags);
 	for (i = 0;i < 3;i++)
 		MSG_WriteCoord (dest, PRVM_serveredictvector(entity, origin)[i]+0.5*(PRVM_serveredictvector(entity, mins)[i]+PRVM_serveredictvector(entity, maxs)[i]), sv.protocol);
 
 	// TODO do we have to do anything here when dest is &sv.reliable_datagram?
 	if(!reliable)
+		SV_FlushBroadcastMessages();
+}
+
+void SV_StartSound_Advanced(prvm_edict_t *entity, int channel, const char *sample, int volume, float attenuation, int flags, float speed, float trapezoid_frac)
+{
+	prvm_prog_t *prog = SVVM_prog;
+	sizebuf_t *dest;
+	int sound_num, field_mask, i, ent, speed4000;
+	const qboolean reliable = flags & CHANNELFLAG_RELIABLE;
+	const int netflags = flags & CHANNELFLAG_NETMASK;
+
+	dest = (reliable ? &sv.reliable_datagram : &sv.datagram);
+
+	if (volume < 0 || volume > 255)
+	{
+		Con_Printf("%s: volume = %i\n", __func__, volume);
+		return;
+	}
+
+	if (attenuation < 0 || attenuation > 4)
+	{
+		Con_Printf("%s: attenuation = %f\n", __func__, attenuation);
+		return;
+	}
+
+	if (!IS_CHAN(channel))
+	{
+		Con_Printf("%s: channel = %i\n", __func__, channel);
+		return;
+	}
+
+	channel = CHAN_ENGINE2NET(channel);
+
+	if (sv.datagram.cursize > MAX_PACKETFRAGMENT - 21)
+		return;
+
+	// find precache number for sound
+	sound_num = SV_SoundIndex(sample, 1);
+	if (!sound_num)
+		return;
+
+	ent = PRVM_NUM_FOR_EDICT(entity);
+
+	speed4000 = (int)floor(speed * 4000.0f + 0.5f);
+	field_mask = 0;
+	if (volume != DEFAULT_SOUND_PACKET_VOLUME)
+		field_mask |= SND_VOLUME;
+	if (attenuation != DEFAULT_SOUND_PACKET_ATTENUATION)
+		field_mask |= SND_ATTENUATION;
+	if (speed4000 && speed4000 != 4000)
+		field_mask |= SND_SPEEDUSHORT4000;
+	if (ent >= 8192 || channel < 0 || channel > 7)
+		field_mask |= SND_LARGEENTITY;
+	if (sound_num >= 256)
+		field_mask |= SND_LARGESOUND;
+	if (netflags && (sv.protocol <= PROTOCOL_DARKPLACES1))
+		field_mask |= SND_FLAGS;
+	if (trapezoid_frac != 0)
+		field_mask |= SND_TRAPEZOID;
+	if (field_mask > SND_MOREBYTES)
+		field_mask |= SND_MOREBYTES;
+
+
+	// directed messages go only to the entity they are targeted on
+	MSG_WriteByte(dest, svcwrath_advsound);
+	MSG_WriteByte(dest, field_mask & 0xFF);
+	if (field_mask & SND_MOREBYTES)
+		MSG_WriteByte(dest, (field_mask >> 8) & 0xFF);
+	if (field_mask & SND_VOLUME)
+		MSG_WriteByte(dest, volume);
+	if (field_mask & SND_ATTENUATION)
+		MSG_WriteByte(dest, (int)(attenuation * 64));
+	if (field_mask & SND_SPEEDUSHORT4000)
+		MSG_WriteShort(dest, speed4000);
+	if (field_mask & SND_LARGEENTITY)
+	{
+		MSG_WriteShort(dest, ent);
+		MSG_WriteChar(dest, channel);
+	}
+	else
+		MSG_WriteShort(dest, (ent << 3) | channel);
+	if ((field_mask & SND_LARGESOUND) || sv.protocol == PROTOCOL_NEHAHRABJP2)
+		MSG_WriteShort(dest, sound_num);
+	else
+		MSG_WriteByte(dest, sound_num);
+	if (field_mask & SND_FLAGS)
+		MSG_WriteByte(dest, netflags);
+	for (i = 0; i < 3; i++)
+		MSG_WriteCoord(dest, PRVM_serveredictvector(entity, origin)[i] + 0.5*(PRVM_serveredictvector(entity, mins)[i] + PRVM_serveredictvector(entity, maxs)[i]), sv.protocol);
+	if (field_mask & SND_TRAPEZOID)
+		MSG_WriteByte(dest, trapezoid_frac * 0xFF);
+
+	// TODO do we have to do anything here when dest is &sv.reliable_datagram?
+	if (!reliable)
 		SV_FlushBroadcastMessages();
 }
 
@@ -1038,6 +1138,17 @@ void SV_SendServerinfo (client_t *client)
 
 	MSG_WriteByte (&client->netconnection->message, svc_signonnum);
 	MSG_WriteByte (&client->netconnection->message, 1);
+
+	// if we already decided upon a protocol version
+	if (sv.protocol == PROTOCOL_WRATH)
+	{
+		if (client->protocolversion) // if we already decided upon a protocol version
+		{
+			MSG_WriteByte(&client->netconnection->message, svc_signonnum);
+			MSG_WriteByte(&client->netconnection->message, 101);
+			MSG_WriteLong(&client->netconnection->message, client->protocolversion);
+		}
+	}
 
 	client->prespawned = false;		// need prespawn, spawn, etc
 	client->spawned = false;		// need prespawn, spawn, etc
@@ -1331,7 +1442,10 @@ static qboolean SV_PrepareEntityForSending (prvm_edict_t *ent, entity_state_t *c
 	if (f)
 	{
 		i = (int)f;
-		cs->scale = (unsigned char)bound(0, i, 255);
+		if (sv.protocol == PROTOCOL_WRATH && host_client->protocolversion >= PROTOCOL_WRATH_SHORTSCALE)
+			cs->scale = (unsigned short)bound(0, i, 0xFFFF);
+		else
+			cs->scale = (unsigned char)bound(0, i, 0xFF);
 	}
 
 	cs->glowcolor = 254;
@@ -2089,7 +2203,7 @@ void SV_WriteClientdataToMessage (client_t *client, prvm_edict_t *ent, sizebuf_t
 		| (sv_gameplayfix_gravityunaffectedbyticrate.integer ? MOVEFLAG_GRAVITYUNAFFECTEDBYTICRATE : 0)
 	;
 	statsf[STAT_MOVEVARS_TICRATE] = sys_ticrate.value;
-	statsf[STAT_MOVEVARS_TIMESCALE] = slowmo.value;
+	statsf[STAT_MOVEVARS_TIMESCALE] = SLOWMO;
 	statsf[STAT_MOVEVARS_GRAVITY] = sv_gravity.value;
 	statsf[STAT_MOVEVARS_STOPSPEED] = sv_stopspeed.value;
 	statsf[STAT_MOVEVARS_MAXSPEED] = sv_maxspeed.value;
@@ -3418,6 +3532,9 @@ void SV_SpawnServer (const char *server)
 	sv.paused = false;
 
 	sv.time = 1.0;
+
+	// Reki (April 17 2023): timescale sv field (to be set by "timescale(float f)" builtin)
+	sv.timescale = 1.0;
 
 	Mod_ClearUsed();
 	worldmodel->used = true;

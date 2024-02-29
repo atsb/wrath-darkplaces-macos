@@ -310,6 +310,15 @@ int VID_GetGamma(unsigned short *ramps, int rampsize)
 	return true;
 }
 
+controllertype_t VID_ControllerType(int index)
+{
+	return CONTROLLER_GENERIC;
+}
+
+// Reki (December 3 2023): TODO: ? not even sure if it's worth bothering, but should implement these rumble functions on other APIs at least for xinput
+void VID_ControllerRumble(int index, float lowf, float highf, int msec) { return; }
+void VID_ControllerRumbleTriggers(int index, float leftf, float rightf, int msec) { return; }
+
 void signal_handler(int sig)
 {
 	Sys_PrintfToTerminal("Received signal %d, exiting...\n", sig);

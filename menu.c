@@ -5058,7 +5058,7 @@ void M_KeyEvent (int key, int ascii, qboolean downevent)
 	}
 }
 
-static int M_InputEvent (int type, int key, int ascii)
+static int M_InputEvent (int type, float key, float ascii)
 {
 	return false;
 }

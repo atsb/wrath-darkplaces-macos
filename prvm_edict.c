@@ -1249,7 +1249,7 @@ const char *PRVM_ED_ParseEdict (prvm_prog_t *prog, const char *data, prvm_edict_
 	while (1)
 	{
 	// parse key
-		if (!COM_ParseToken_Simple(&data, false, false, true))
+		if (!COM_ParseToken_Simple(&data, false, true, true))
 			prog->error_cmd("PRVM_ED_ParseEdict: EOF without closing brace");
 		if (developer_entityparsing.integer)
 			Con_Printf("Key: \"%s\"", com_token);
@@ -1281,7 +1281,7 @@ const char *PRVM_ED_ParseEdict (prvm_prog_t *prog, const char *data, prvm_edict_
 		}
 
 	// parse value
-		if (!COM_ParseToken_Simple(&data, false, false, true))
+		if (!COM_ParseToken_Simple(&data, false, true, true))
 			prog->error_cmd("PRVM_ED_ParseEdict: EOF without closing brace");
 		if (developer_entityparsing.integer)
 			Con_Printf(" \"%s\"\n", com_token);
@@ -1825,10 +1825,6 @@ void PRVM_Prog_Reset(prvm_prog_t *prog)
 {
 	if (prog->loaded)
 	{
-		if (prog->tempstringsbuf.cursize)
-			Mem_Free(prog->tempstringsbuf.data);
-
-		prog->tempstringsbuf.cursize = 0;
 		PRVM_LeakTest(prog);
 		prog->reset_cmd(prog);
 		Mem_FreePool(&prog->progs_mempool);

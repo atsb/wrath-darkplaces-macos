@@ -1,11 +1,14 @@
 
 #ifdef WIN32
 #ifdef _MSC_VER
-#pragma comment(lib, "sdl2.lib")
-#pragma comment(lib, "sdl2main.lib")
+#pragma comment(lib, "sdl.lib")
+#pragma comment(lib, "sdlmain.lib")
 #endif
 #include <io.h>
 #include "conio.h"
+// Reki (February 29 2024): make sure dedicated GPUs are preferred
+__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+__declspec(dllexport) unsigned long AmdPowerXpressRequestHighPerformance = 0x00000001;
 #else
 #include <unistd.h>
 #include <fcntl.h>

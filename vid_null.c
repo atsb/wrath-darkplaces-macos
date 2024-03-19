@@ -69,6 +69,14 @@ int VID_GetGamma(unsigned short *ramps, int rampsize)
 	return FALSE;
 }
 
+controllertype_t VID_ControllerType(int index)
+{
+	return CONTROLLER_GENERIC;
+}
+
+void VID_ControllerRumble(int index, float lowf, float highf, int msec) { return; }
+void VID_ControllerRumbleTriggers(int index, float leftf, float rightf, int msec) { return; }
+
 void VID_Init(void)
 {
 	InitSig(); // trap evil signals

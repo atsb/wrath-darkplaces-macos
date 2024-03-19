@@ -730,11 +730,11 @@ void V_CalcRefdefUsing (const matrix4x4_t *entrendermatrix, const vec3_t clviewa
 					if (cycle < cl_bobup.value)
 						cycle = sin(M_PI * cycle / cl_bobup.value);
 					else
-						cycle = sin(M_PI + M_PI * (cycle-cl_bobup.value)/(1.0 - cl_bobup.value));
+						cycle = sin(M_PI + M_PI * (cycle - cl_bobup.value)/(1.0 - cl_bobup.value));
 					// bob is proportional to velocity in the xy plane
 					// (don't count Z, or jumping messes it up)
 					bob = xyspeed * bound(0, cl_bob.value, 0.05);
-					bob = bob*0.3 + bob*0.7*cycle;
+					bob = bob*0.3 + bob  *0.7 * cycle;
 					vieworg[2] += bob;
 					// we also need to adjust gunorg, or this appears like pushing the gun!
 					// In the old code, this was applied to vieworg BEFORE copying to gunorg,
@@ -867,6 +867,12 @@ void V_CalcRefdefUsing (const matrix4x4_t *entrendermatrix, const vec3_t clviewa
 		// calculate a viewmodel matrix for use in view-attached entities
 		Matrix4x4_Copy(&viewmodelmatrix_nobob, &r_refdef.view.matrix);
 		Matrix4x4_ConcatScale(&viewmodelmatrix_nobob, cl_viewmodel_scale.value);
+
+		if (cl.csqc_viewmodel_overwrite)
+		{
+			VectorAdd(vieworg, cl.csqc_viewmodel_origin, gunorg);
+			VectorAdd(viewangles, cl.csqc_viewmodel_angles, gunangles);
+		}
 
 		Matrix4x4_CreateFromQuakeEntity(&viewmodelmatrix_withbob, gunorg[0], gunorg[1], gunorg[2], gunangles[0], gunangles[1], gunangles[2], cl_viewmodel_scale.value);
 		VectorCopy(vieworg, cl.csqc_vieworiginfromengine);

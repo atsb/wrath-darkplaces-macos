@@ -1489,12 +1489,33 @@ static void SND_Spatialize_WithSfx(channel_t *ch, qboolean isstatic, sfx_t *sfx)
 		// calculate stereo seperation and distance attenuation
 		VectorSubtract(listener_origin, ch->origin, source_vec);
 		dist = VectorLength(source_vec);
-		f = dist * ch->distfade;
 
-		f =
-			((snd_attenuation_exponent.value == 0) ? 1.0 : pow(1.0 - min(1.0, f), (double)snd_attenuation_exponent.value))
-			*
-			((snd_attenuation_decibel.value == 0) ? 1.0 : pow(0.1, 0.1 * snd_attenuation_decibel.value * f));
+		if (ch->trap_frac) // trapezoid sound
+		{
+			f = dist * ch->distfade;
+			
+			if (f < ch->trap_frac)
+			{
+				f = 1;
+			}
+			else
+			{
+				f = 1 - ((1 - f) / (1 - ch->trap_frac));
+
+				f = ((snd_attenuation_exponent.value == 0) ? 1.0 : pow(1.0 - min(1.0, f), (double)snd_attenuation_exponent.value))
+					*
+					((snd_attenuation_decibel.value == 0) ? 1.0 : pow(0.1, 0.1 * snd_attenuation_decibel.value * f));
+			}
+		}
+		else // normal sound
+		{
+			f = dist * ch->distfade;
+
+			f =
+				((snd_attenuation_exponent.value == 0) ? 1.0 : pow(1.0 - min(1.0, f), (double)snd_attenuation_exponent.value))
+				*
+				((snd_attenuation_decibel.value == 0) ? 1.0 : pow(0.1, 0.1 * snd_attenuation_decibel.value * f));
+		}
 
 		intensity = mastervol * f;
 		if (intensity > 0)
@@ -1519,7 +1540,13 @@ static void SND_Spatialize_WithSfx(channel_t *ch, qboolean isstatic, sfx_t *sfx)
 				intensity *= 0.5f;
 
 			ch->prologic_invert = 1;
-			if (snd_spatialization_prologic.integer != 0)
+			if (ch->flags & CHANNELFLAG_NOSPATIALIZE)
+			{
+				// mono volume
+				for (i = 0; i < SND_LISTENERS; i++)
+					ch->volume[i] = intensity;
+			}
+			else if (snd_spatialization_prologic.integer != 0)
 			{
 				if (dist == 0)
 					angle_factor = 0.5f;
@@ -1626,7 +1653,7 @@ static void SND_Spatialize(channel_t *ch, qboolean isstatic)
 // Start a sound effect
 // =======================================================================
 
-static void S_PlaySfxOnChannel (sfx_t *sfx, channel_t *target_chan, unsigned int flags, vec3_t origin, float fvol, float attenuation, qboolean isstatic, int entnum, int entchannel, int startpos, float fspeed)
+static void S_PlaySfxOnChannel (sfx_t *sfx, channel_t *target_chan, unsigned int flags, vec3_t origin, float fvol, float attenuation, qboolean isstatic, int entnum, int entchannel, int startpos, float fspeed, float trapezoid_frac)
 {
 	if (!sfx)
 	{
@@ -1672,6 +1699,11 @@ static void S_PlaySfxOnChannel (sfx_t *sfx, channel_t *target_chan, unsigned int
 	else
 		target_chan->distfade = attenuation / snd_soundradius.value;
 
+	if (trapezoid_frac)
+		target_chan->trap_frac = trapezoid_frac;
+	else
+		target_chan->trap_frac = 0;
+
 	// set the listener volumes
 	S_SetChannelVolume(target_chan - channels, fvol);
 	S_SetChannelSpeed(target_chan - channels, fspeed);
@@ -1682,8 +1714,7 @@ static void S_PlaySfxOnChannel (sfx_t *sfx, channel_t *target_chan, unsigned int
 	target_chan->sfx = sfx;
 }
 
-
-int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation, float startposition, int flags, float fspeed)
+int S_StartSound_StartPosition_Wrath(int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation, float startposition, int flags, float fspeed, float trapezoid_frac)
 {
 	channel_t *target_chan, *check, *ch;
 	int		ch_idx, startpos, i;
@@ -1691,19 +1722,19 @@ int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, ve
 	if (snd_renderbuffer == NULL || sfx == NULL || nosound.integer)
 		return -1;
 
-	if(sfx == &changevolume_sfx)
+	if (sfx == &changevolume_sfx)
 	{
 		if (!IS_CHAN_SINGLE(entchannel))
 			return -1;
-		for (ch_idx=NUM_AMBIENTS ; ch_idx < NUM_AMBIENTS + MAX_DYNAMIC_CHANNELS ; ch_idx++)
+		for (ch_idx = NUM_AMBIENTS; ch_idx < NUM_AMBIENTS + MAX_DYNAMIC_CHANNELS; ch_idx++)
 		{
 			ch = &channels[ch_idx];
 			if (ch->entnum == entnum && ch->entchannel == entchannel)
 			{
 				S_SetChannelVolume(ch_idx, fvol);
 				S_SetChannelSpeed(ch_idx, fspeed);
-				for(i = 1; i > 0 && (i <= flags || i <= (int) channels[ch_idx].flags); i <<= 1)
-					if((flags ^ channels[ch_idx].flags) & i)
+				for (i = 1; i > 0 && (i <= flags || i <= (int)channels[ch_idx].flags); i <<= 1)
+					if ((flags ^ channels[ch_idx].flags) & i)
 						S_SetChannelFlag(ch_idx, i, (flags & i) != 0);
 				ch->distfade = attenuation / snd_soundradius.value;
 				SND_Spatialize(ch, false);
@@ -1727,7 +1758,7 @@ int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, ve
 	startpos = (int)(startposition * sfx->format.speed);
 	if (startpos == 0)
 	{
-		for (ch_idx=NUM_AMBIENTS ; ch_idx < NUM_AMBIENTS + MAX_DYNAMIC_CHANNELS ; ch_idx++, check++)
+		for (ch_idx = NUM_AMBIENTS; ch_idx < NUM_AMBIENTS + MAX_DYNAMIC_CHANNELS; ch_idx++, check++)
 		{
 			if (check == target_chan)
 				continue;
@@ -1738,7 +1769,7 @@ int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, ve
 				float maxtics = snd_identicalsoundrandomization_tics.value;
 				float maxticsdelta = ((cls.state == ca_connected) ? (maxtics * (cl.mtime[0] - cl.mtime[1])) : 0);
 				float maxdelta = 0;
-				if(maxticsdelta == 0 || fabs(maxticsdelta) > fabs(maxtime))
+				if (maxticsdelta == 0 || fabs(maxticsdelta) > fabs(maxtime))
 					maxdelta = maxtime;
 				else
 					maxdelta = fabs(maxticsdelta) * ((maxtime > 0) ? 1 : -1);
@@ -1750,9 +1781,14 @@ int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, ve
 		}
 	}
 
-	S_PlaySfxOnChannel (sfx, target_chan, flags, origin, fvol, attenuation, false, entnum, entchannel, startpos, fspeed);
+	S_PlaySfxOnChannel(sfx, target_chan, flags, origin, fvol, attenuation, false, entnum, entchannel, startpos, fspeed, trapezoid_frac);
 
 	return (target_chan - channels);
+}
+
+int S_StartSound_StartPosition_Flags (int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation, float startposition, int flags, float fspeed)
+{
+	return S_StartSound_StartPosition_Wrath(entnum, entchannel, sfx, origin, fvol, attenuation, startposition, flags, fspeed, 0);
 }
 
 int S_StartSound (int entnum, int entchannel, sfx_t *sfx, vec3_t origin, float fvol, float attenuation)
@@ -1799,7 +1835,8 @@ qboolean S_SetChannelFlag (unsigned int ch_ind, unsigned int flag, qboolean valu
 	if (flag != CHANNELFLAG_FORCELOOP &&
 		flag != CHANNELFLAG_PAUSED &&
 		flag != CHANNELFLAG_FULLVOLUME &&
-		flag != CHANNELFLAG_LOCALSOUND)
+		flag != CHANNELFLAG_LOCALSOUND &&
+		flag != CHANNELFLAG_NOSPATIALIZE)
 		return false;
 
 	if (value)
@@ -1936,7 +1973,7 @@ void S_StaticSound (sfx_t *sfx, vec3_t origin, float fvol, float attenuation)
 	}
 
 	target_chan = &channels[total_channels++];
-	S_PlaySfxOnChannel (sfx, target_chan, CHANNELFLAG_FORCELOOP, origin, fvol, attenuation, true, 0, 0, 0, 1.0f);
+	S_PlaySfxOnChannel (sfx, target_chan, CHANNELFLAG_FORCELOOP, origin, fvol, attenuation, true, 0, 0, 0, 1.0f, 0);
 }
 
 

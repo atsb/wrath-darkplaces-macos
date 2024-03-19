@@ -81,6 +81,7 @@ void Protocol_Names(char *buffer, size_t buffersize);
 // flags for the pflags field of entities
 #define PFLAGS_NOSHADOW			1
 #define PFLAGS_CORONA			2
+#define PFLAGS_LODFADE			64
 #define PFLAGS_FULLDYNAMIC		128 // must be set or the light fields are ignored
 
 // if the high bit of the servercmd is set, the low bits are fast update flags:
@@ -166,6 +167,9 @@ void Protocol_Names(char *buffer, size_t buffersize);
 #define	SND_LARGEENTITY	(1<<3)		// a short and a byte (instead of a short)
 #define	SND_LARGESOUND	(1<<4)		// a short (instead of a byte)
 #define	SND_SPEEDUSHORT4000	(1<<5)		// ushort speed*4000 (speed is usually 1.0, a value of 0.0 is the same as 1.0)
+#define SND_FLAGS (1<<6)	// a byte with channelflags
+#define SND_MOREBYTES (1<<7)
+#define SND_TRAPEZOID (1<<8)
 
 
 // defaults for clientinfo messages
@@ -254,6 +258,8 @@ void Protocol_Names(char *buffer, size_t buffersize);
 #define svc_trailparticles	60		// [short] entnum [short] effectnum [vector] start [vector] end
 #define svc_pointparticles	61		// [short] effectnum [vector] start [vector] velocity [short] count
 #define svc_pointparticles1	62		// [short] effectnum [vector] start, same as svc_pointparticles except velocity is zero and count is 1
+
+#define svcwrath_advsound	65		// Reki: advanced sound packet, for adding trapezoid sound falloff
 
 //
 // client to server
@@ -404,7 +410,7 @@ typedef struct entity_state_s
 	unsigned char colormap;
 	unsigned char skin; // also chooses cubemap for rtlights if lightpflags & LIGHTPFLAGS_FULLDYNAMIC
 	unsigned char alpha;
-	unsigned char scale;
+	unsigned short scale;
 	unsigned char glowsize;
 	unsigned char glowcolor;
 	unsigned char flags;

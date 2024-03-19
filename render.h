@@ -55,6 +55,7 @@ extern cvar_t gl_flashblend;
 extern cvar_t r_novis;
 
 extern cvar_t r_trippy;
+extern cvar_t r_trippy_scale;
 extern cvar_t r_fxaa;
 
 extern cvar_t r_lerpsprites;
@@ -494,7 +495,7 @@ void R_DrawCustomSurface_Texture(texture_t *texture, const matrix4x4_t *texmatri
 void RSurf_PrepareVerticesForBatch(int batchneed, int texturenumsurfaces, const msurface_t **texturesurfacelist);
 void RSurf_DrawBatch(void);
 
-void R_DecalSystem_SplatEntities(const vec3_t org, const vec3_t normal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float size);
+void R_DecalSystem_SplatEntities(const vec3_t org, const vec3_t normal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float size,float lifetime);
 
 typedef enum rsurfacepass_e
 {

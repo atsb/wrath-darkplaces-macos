@@ -715,28 +715,28 @@ void Host_Main(void)
 
 			// Look for clients who have spawned
 			playing = false;
-			for (i = 0, host_client = svs.clients;i < svs.maxclients;i++, host_client++)
-				if(host_client->begun)
-					if(host_client->netconnection)
+			for (i = 0, host_client = svs.clients; i < svs.maxclients; i++, host_client++)
+				if (host_client->begun)
+					if (host_client->netconnection)
 						playing = true;
-			if(sv.time < 10)
+			if (sv.time < 10)
 			{
 				// don't accumulate time for the first 10 seconds of a match
 				// so things can settle
 				svs.perf_acc_realtime = svs.perf_acc_sleeptime = svs.perf_acc_lost = svs.perf_acc_offset = svs.perf_acc_offset_squared = svs.perf_acc_offset_max = svs.perf_acc_offset_samples = 0;
 			}
-			else if(svs.perf_acc_realtime > 5)
+			else if (svs.perf_acc_realtime > 5)
 			{
 				svs.perf_cpuload = 1 - svs.perf_acc_sleeptime / svs.perf_acc_realtime;
 				svs.perf_lost = svs.perf_acc_lost / svs.perf_acc_realtime;
-				if(svs.perf_acc_offset_samples > 0)
+				if (svs.perf_acc_offset_samples > 0)
 				{
 					svs.perf_offset_max = svs.perf_acc_offset_max;
 					svs.perf_offset_avg = svs.perf_acc_offset / svs.perf_acc_offset_samples;
 					svs.perf_offset_sdev = sqrt(svs.perf_acc_offset_squared / svs.perf_acc_offset_samples - svs.perf_offset_avg * svs.perf_offset_avg);
 				}
-				if(svs.perf_lost > 0 && developer_extra.integer)
-					if(playing) // only complain if anyone is looking
+				if (svs.perf_lost > 0 && developer_extra.integer)
+					if (playing) // only complain if anyone is looking
 						Con_DPrintf("Server can't keep up: %s\n", Host_TimingReport(vabuf, sizeof(vabuf)));
 				svs.perf_acc_realtime = svs.perf_acc_sleeptime = svs.perf_acc_lost = svs.perf_acc_offset = svs.perf_acc_offset_squared = svs.perf_acc_offset_max = svs.perf_acc_offset_samples = 0;
 			}
@@ -748,7 +748,7 @@ void Host_Main(void)
 			Cvar_SetValue("host_framerate", 0);
 
 		// keep the random time dependent, but not when playing demos/benchmarking
-		if(!*sv_random_seed.string && !cls.demoplayback)
+		if (!*sv_random_seed.string && !cls.demoplayback)
 			rand();
 
 		// get new key events
@@ -779,7 +779,7 @@ void Host_Main(void)
 //			R_TimeReport("preconsole");
 			CL_VM_PreventInformationLeaks();
 			Cbuf_Frame();
-//			R_TimeReport("console");
+			//			R_TimeReport("console");
 		}
 
 		//Con_Printf("%6.0f %6.0f\n", cl_timer * 1000000.0, sv_timer * 1000000.0);
@@ -796,11 +796,11 @@ void Host_Main(void)
 		{
 			double time0, delta;
 
-			if(host_maxwait.value <= 0)
+			if (host_maxwait.value <= 0)
 				wait = min(wait, 1000000.0);
 			else
 				wait = min(wait, host_maxwait.value * 1000.0);
-			if(wait < 1)
+			if (wait < 1)
 				wait = 1; // because we cast to int
 
 			time0 = Sys_DirtyTime();
@@ -816,7 +816,7 @@ void Host_Main(void)
 			if (delta < 0 || delta >= 1800) delta = 0;
 			if (!svs.threaded)
 				svs.perf_acc_sleeptime += delta;
-//			R_TimeReport("sleep");
+			//			R_TimeReport("sleep");
 			continue;
 		}
 
@@ -832,13 +832,13 @@ void Host_Main(void)
 
 		R_TimeReport("---");
 
-	//-------------------
-	//
-	// server operations
-	//
-	//-------------------
+		//-------------------
+		//
+		// server operations
+		//
+		//-------------------
 
-		// limit the frametime steps to no more than 100ms each
+			// limit the frametime steps to no more than 100ms each
 		if (sv.active && sv_timer > 0 && !svs.threaded)
 		{
 			// execute one or more server frames, with an upper limit on how much
@@ -868,31 +868,31 @@ void Host_Main(void)
 				framelimit = cl_maxphysicsframesperserverframe.integer;
 				aborttime = Sys_DirtyTime() + 0.1;
 			}
-			if(slowmo.value > 0 && slowmo.value < 1)
-				advancetime = min(advancetime, 0.1 / slowmo.value);
+			if ((SLOWMO) > 0 && SLOWMO < 1)
+				advancetime = min(advancetime, 0.1 / SLOWMO);
 			else
 				advancetime = min(advancetime, 0.1);
 
-			if(advancetime > 0)
+			if (advancetime > 0)
 			{
-				offset = Sys_DirtyTime() - dirtytime;if (offset < 0 || offset >= 1800) offset = 0;
+				offset = Sys_DirtyTime() - dirtytime; if (offset < 0 || offset >= 1800) offset = 0;
 				offset += sv_timer;
 				++svs.perf_acc_offset_samples;
 				svs.perf_acc_offset += offset;
 				svs.perf_acc_offset_squared += offset * offset;
-				if(svs.perf_acc_offset_max < offset)
+				if (svs.perf_acc_offset_max < offset)
 					svs.perf_acc_offset_max = offset;
 			}
 
 			// only advance time if not paused
 			// the game also pauses in singleplayer when menu or console is used
-			sv.frametime = advancetime * slowmo.value;
+			sv.frametime = advancetime * SLOWMO;
 			if (host_framerate.value)
 				sv.frametime = host_framerate.value;
 			if (sv.paused || (cl.islocalgame && (key_dest != key_game || key_consoleactive || cl.csqc_paused)))
 				sv.frametime = 0;
 
-			for (framecount = 0;framecount < framelimit && sv_timer > 0;framecount++)
+			for (framecount = 0; framecount < framelimit && sv_timer > 0; framecount++)
 			{
 				sv_timer -= advancetime;
 
@@ -926,11 +926,11 @@ void Host_Main(void)
 			R_TimeReport("servernetwork");
 		}
 
-	//-------------------
-	//
-	// client operations
-	//
-	//-------------------
+		//-------------------
+		//
+		// client operations
+		//
+		//-------------------
 
 		if (cls.state != ca_dedicated && (cl_timer > 0 || cls.timedemo || ((vid_activewindow ? cl_maxfps : cl_maxidlefps).value < 1)))
 		{
@@ -1027,7 +1027,7 @@ void Host_Main(void)
 				time2 = Sys_DirtyTime();
 
 			// update audio
-			if(cl.csqc_usecsqclistener)
+			if (cl.csqc_usecsqclistener)
 			{
 				S_Update(&cl.csqc_listenermatrix);
 				cl.csqc_usecsqclistener = false;
@@ -1045,12 +1045,12 @@ void Host_Main(void)
 
 			if (host_speeds.integer)
 			{
-				pass1 = (int)((time1 - time3)*1000000);
+				pass1 = (int)((time1 - time3) * 1000000);
 				time3 = Sys_DirtyTime();
-				pass2 = (int)((time2 - time1)*1000000);
-				pass3 = (int)((time3 - time2)*1000000);
+				pass2 = (int)((time2 - time1) * 1000000);
+				pass3 = (int)((time3 - time2) * 1000000);
 				Con_Printf("%6ius total %6ius server %6ius gfx %6ius snd\n",
-							pass1+pass2+pass3, pass1, pass2, pass3);
+					pass1 + pass2 + pass3, pass1, pass2, pass3);
 			}
 		}
 

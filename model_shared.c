@@ -1887,6 +1887,8 @@ void Mod_LoadQ3Shaders(void)
 						else if (numparameters >= 3 && (!strcasecmp(parameter[0], "animmap") || !strcasecmp(parameter[0], "animclampmap")))
 						{
 							int i;
+							if (!strcasecmp(parameter[0], "animclampmap"))
+								layer->clampmap = true;
 							layer->numframes = min(numparameters - 2, TEXTURE_MAXFRAMES);
 							layer->framerate = atof(parameter[1]);
 							layer->texturename = (char **) Mem_Alloc (q3shaders_mem, sizeof (char*) * layer->numframes);

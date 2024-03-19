@@ -30,6 +30,7 @@ int		prvm_type_size[8] = {1,sizeof(string_t)/4,1,3,1,1,sizeof(func_t)/4,sizeof(v
 prvm_eval_t prvm_badvalue; // used only for error returns
 
 cvar_t prvm_language = {CVAR_SAVE, "prvm_language", "", "when set, loads PROGSFILE.LANGUAGENAME.po and common.LANGUAGENAME.po for string translations; when set to dump, PROGSFILE.pot is written from the strings in the progs"};
+cvar_t prvm_language_fallback = {0, "prvm_language_fallback", "en", "if set, any translations not defined by files found via prvm_language will be filled in with translations from this language"};
 // LordHavoc: prints every opcode as it executes - warning: this is significant spew
 cvar_t prvm_traceqc = {0, "prvm_traceqc", "0", "prints every QuakeC statement as it is executed (only for really thorough debugging!)"};
 // LordHavoc: counts usage of each QuakeC statement
@@ -1248,7 +1249,7 @@ const char *PRVM_ED_ParseEdict (prvm_prog_t *prog, const char *data, prvm_edict_
 	while (1)
 	{
 	// parse key
-		if (!COM_ParseToken_Simple(&data, false, false, true))
+		if (!COM_ParseToken_Simple(&data, false, true, true))
 			prog->error_cmd("PRVM_ED_ParseEdict: EOF without closing brace");
 		if (developer_entityparsing.integer)
 			Con_Printf("Key: \"%s\"", com_token);
@@ -1280,7 +1281,7 @@ const char *PRVM_ED_ParseEdict (prvm_prog_t *prog, const char *data, prvm_edict_
 		}
 
 	// parse value
-		if (!COM_ParseToken_Simple(&data, false, false, true))
+		if (!COM_ParseToken_Simple(&data, false, true, true))
 			prog->error_cmd("PRVM_ED_ParseEdict: EOF without closing brace");
 		if (developer_entityparsing.integer)
 			Con_Printf(" \"%s\"\n", com_token);
@@ -1686,9 +1687,16 @@ static void PRVM_PO_ParseString(char *out, const char *in, size_t outsize)
 		++in;
 	}
 }
-static po_t *PRVM_PO_Load(const char *filename, const char *filename2, mempool_t *pool)
+static po_t *PRVM_PO_Initialize(mempool_t *pool)
 {
-	po_t *po = NULL;
+	po_t *po = (po_t *)Mem_Alloc(pool, sizeof(*po));
+	memset(po, 0, sizeof(*po));
+
+	return po;
+};
+
+static void PRVM_PO_AddFile(po_t *po, mempool_t *pool, const char *filename)
+{
 	const char *p, *q;
 	int mode;
 	char inbuf[MAX_INPUTLINE];
@@ -1696,107 +1704,91 @@ static po_t *PRVM_PO_Load(const char *filename, const char *filename2, mempool_t
 	size_t decodedpos;
 	int hashindex;
 	po_string_t thisstr;
-	int i;
 
-	for (i = 0; i < 2; ++i)
+	const char *buf = (const char *)FS_LoadFile(filename, pool, true, NULL);
+
+	if (!buf)
+		return;
+
+	memset(&thisstr, 0, sizeof(thisstr)); // hush compiler warning
+
+	p = buf;
+	while (*p)
 	{
-		const char *buf = (const char *)
-			FS_LoadFile((i > 0 ? filename : filename2), pool, true, NULL);
-		// first read filename2, then read filename
-		// so that progs.dat.de.po wins over common.de.po
-		// and within file, last item wins
-
-		if(!buf)
+		if (*p == '#')
+		{
+			// skip to newline
+			p = strchr(p, '\n');
+			if (!p)
+				break;
+			++p;
 			continue;
-
-		if (!po)
-		{
-			po = (po_t *)Mem_Alloc(pool, sizeof(*po));
-			memset(po, 0, sizeof(*po));
 		}
-
-		memset(&thisstr, 0, sizeof(thisstr)); // hush compiler warning
-
-		p = buf;
-		while(*p)
+		if (*p == '\r' || *p == '\n')
 		{
-			if(*p == '#')
-			{
-				// skip to newline
-				p = strchr(p, '\n');
-				if(!p)
-					break;
-				++p;
-				continue;
-			}
-			if(*p == '\r' || *p == '\n')
-			{
-				++p;
-				continue;
-			}
-			if(!strncmp(p, "msgid \"", 7))
-			{
-				mode = 0;
-				p += 6;
-			}
-			else if(!strncmp(p, "msgstr \"", 8))
-			{
-				mode = 1;
-				p += 7;
-			}
-			else
-			{
-				p = strchr(p, '\n');
-				if(!p)
-					break;
-				++p;
-				continue;
-			}
-			decodedpos = 0;
-			while(*p == '"')
-			{
-				++p;
-				q = strchr(p, '\n');
-				if(!q)
-					break;
-				if(*(q-1) == '\r')
-					--q;
-				if(*(q-1) != '"')
-					break;
-				if((size_t)(q - p) >= (size_t) sizeof(inbuf))
-					break;
-				strlcpy(inbuf, p, q - p); // not - 1, because this adds a NUL
-				PRVM_PO_ParseString(decodedbuf + decodedpos, inbuf, sizeof(decodedbuf) - decodedpos);
-				decodedpos += strlen(decodedbuf + decodedpos);
-				if(*q == '\r')
-					++q;
-				if(*q == '\n')
-					++q;
-				p = q;
-			}
-			if(mode == 0)
-			{
-				if(thisstr.key)
-					Mem_Free(thisstr.key);
-				thisstr.key = (char *)Mem_Alloc(pool, decodedpos + 1);
-				memcpy(thisstr.key, decodedbuf, decodedpos + 1);
-			}
-			else if(decodedpos > 0 && thisstr.key) // skip empty translation results
-			{
-				thisstr.value = (char *)Mem_Alloc(pool, decodedpos + 1);
-				memcpy(thisstr.value, decodedbuf, decodedpos + 1);
-				hashindex = CRC_Block((const unsigned char *) thisstr.key, strlen(thisstr.key)) % PO_HASHSIZE;
-				thisstr.nextonhashchain = po->hashtable[hashindex];
-				po->hashtable[hashindex] = (po_string_t *)Mem_Alloc(pool, sizeof(thisstr));
-				memcpy(po->hashtable[hashindex], &thisstr, sizeof(thisstr));
-				memset(&thisstr, 0, sizeof(thisstr));
-			}
+			++p;
+			continue;
 		}
-		
-		Mem_Free((char *) buf);
+		if (!strncmp(p, "msgid \"", 7))
+		{
+			mode = 0;
+			p += 6;
+		}
+		else if (!strncmp(p, "msgstr \"", 8))
+		{
+			mode = 1;
+			p += 7;
+		}
+		else
+		{
+			p = strchr(p, '\n');
+			if (!p)
+				break;
+			++p;
+			continue;
+		}
+		decodedpos = 0;
+		while (*p == '"')
+		{
+			++p;
+			q = strchr(p, '\n');
+			if (!q)
+				break;
+			if (*(q - 1) == '\r')
+				--q;
+			if (*(q - 1) != '"')
+				break;
+			if ((size_t)(q - p) >= (size_t) sizeof(inbuf))
+				break;
+			strlcpy(inbuf, p, q - p); // not - 1, because this adds a NUL
+			PRVM_PO_ParseString(decodedbuf + decodedpos, inbuf, sizeof(decodedbuf) - decodedpos);
+			decodedpos += strlen(decodedbuf + decodedpos);
+			if (*q == '\r')
+				++q;
+			if (*q == '\n')
+				++q;
+			p = q;
+		}
+		if (mode == 0)
+		{
+			if (thisstr.key)
+				Mem_Free(thisstr.key);
+			thisstr.key = (char *)Mem_Alloc(pool, decodedpos + 1);
+			memcpy(thisstr.key, decodedbuf, decodedpos + 1);
+		}
+		else if (decodedpos > 0 && thisstr.key) // skip empty translation results
+		{
+			thisstr.value = (char *)Mem_Alloc(pool, decodedpos + 1);
+			memcpy(thisstr.value, decodedbuf, decodedpos + 1);
+			hashindex = CRC_Block((const unsigned char *)thisstr.key, strlen(thisstr.key)) % PO_HASHSIZE;
+			thisstr.nextonhashchain = po->hashtable[hashindex];
+			po->hashtable[hashindex] = (po_string_t *)Mem_Alloc(pool, sizeof(thisstr));
+			memcpy(po->hashtable[hashindex], &thisstr, sizeof(thisstr));
+			memset(&thisstr, 0, sizeof(thisstr));
+		}
 	}
 
-	return po;
+	Mem_Free((char *)buf);
 }
 static const char *PRVM_PO_Lookup(po_t *po, const char *str)
 {
@@ -1833,10 +1825,6 @@ void PRVM_Prog_Reset(prvm_prog_t *prog)
 {
 	if (prog->loaded)
 	{
-		if (prog->tempstringsbuf.cursize)
-			Mem_Free(prog->tempstringsbuf.data);
-
-		prog->tempstringsbuf.cursize = 0;
 		PRVM_LeakTest(prog);
 		prog->reset_cmd(prog);
 		Mem_FreePool(&prog->progs_mempool);
@@ -2275,7 +2263,7 @@ void PRVM_Prog_Load(prvm_prog_t *prog, const char * filename, unsigned char * da
 
 	PRVM_Init_Exec(prog);
 
-	if(*prvm_language.string)
+	if((*prvm_language.string) || (*prvm_language_fallback.string))
 	// in CSQC we really shouldn't be able to change how stuff works... sorry for now
 	// later idea: include a list of authorized .po file checksums with the csprogs
 	{
@@ -2323,10 +2311,27 @@ void PRVM_Prog_Load(prvm_prog_t *prog, const char * filename, unsigned char * da
 		}
 		else
 		{
-			po_t *po = PRVM_PO_Load(
+			po_t *po;
+			// Reki (October 8 2023): Refactored this to be able to load an arbitrary number of .po files
+			#if 1
+			po = PRVM_PO_Initialize(prog->progs_mempool);
+			if (*prvm_language_fallback.string)
+			{
+				PRVM_PO_AddFile(po, prog->progs_mempool, va(vabuf2, sizeof(vabuf2), "common.%s.po", prvm_language_fallback.string));
+				PRVM_PO_AddFile(po, prog->progs_mempool, va(vabuf, sizeof(vabuf), "%s.%s.po", realfilename, prvm_language_fallback.string));
+			}
+			if (*prvm_language.string)
+			{
+				PRVM_PO_AddFile(po, prog->progs_mempool, va(vabuf2, sizeof(vabuf2), "common.%s.po", prvm_language.string));
+				PRVM_PO_AddFile(po, prog->progs_mempool, va(vabuf, sizeof(vabuf), "%s.%s.po", realfilename, prvm_language.string));
+			}
+			#else
+			po = PRVM_PO_Load(
 					va(vabuf, sizeof(vabuf), "%s.%s.po", realfilename, prvm_language.string),
 					va(vabuf2, sizeof(vabuf2), "common.%s.po", prvm_language.string),
 					prog->progs_mempool);
+			#endif
+
 			if(po)
 			{
 				for (i=0 ; i<prog->numglobaldefs ; i++)
@@ -2909,6 +2914,7 @@ void PRVM_Init (void)
 	Cmd_AddCommand ("prvm_edictwatchpoint", PRVM_EdictWatchpoint_f, "marks an entity field as watchpoint (when this is executed, a stack trace is printed); to actually halt and investigate state, combine this with a gdb breakpoint on PRVM_Breakpoint, or with prvm_breakpointdump; run with just progs name to clear watchpoint");
 
 	Cvar_RegisterVariable (&prvm_language);
+	Cvar_RegisterVariable (&prvm_language_fallback);
 	Cvar_RegisterVariable (&prvm_traceqc);
 	Cvar_RegisterVariable (&prvm_statementprofiling);
 	Cvar_RegisterVariable (&prvm_timeprofiling);
@@ -3418,3 +3424,111 @@ void PRVM_LeakTest(prvm_prog_t *prog)
 	if(!leaked)
 		Con_Printf("Congratulations. No leaks found.\n");
 }
+
+void PRVM_ED_CallPrespawnFunction(prvm_prog_t *prog, prvm_edict_t *ent)
+{
+	if (PRVM_serverfunction(SV_OnEntityPreSpawnFunction))
+	{
+		// self = ent
+		PRVM_serverglobalfloat(time) = sv.time;
+		PRVM_serverglobaledict(self) = PRVM_EDICT_TO_PROG(ent);
+		prog->ExecuteProgram(prog, PRVM_serverfunction(SV_OnEntityPreSpawnFunction), "QC function SV_OnEntityPreSpawnFunction is missing");
+	}
+}
+
+qboolean PRVM_ED_CallSpawnFunction(prvm_prog_t *prog, prvm_edict_t *ent, const char *data, const char *start)
+{
+	const char *funcname;
+	mfunction_t *func;
+	char vabuf[1024];
+
+//
+// immediately call spawn function, but only if there is a self global and a classname
+//
+	if (!ent->priv.server->free)
+	{
+		if (!PRVM_alledictstring(ent, classname))
+		{
+			Con_Print("No classname for:\n");
+			PRVM_ED_Print(prog, ent, NULL);
+			PRVM_ED_Free (prog, ent);
+			return false;
+		}
+		/*
+		 * This is required for FTE compatibility (FreeCS).
+		 * It copies the key/value pairs themselves into a
+		 * global for QC to parse on its own.
+		 *
+		else if (data && start)
+		{
+			if((fulldata = PRVM_ED_FindGlobalEval(prog, "__fullspawndata")))
+			{
+				const char *in;
+				char *spawndata;
+				fulldata->string = PRVM_AllocString(prog, data - start + 1, &spawndata);
+				for(in = start; in < data; )
+				{
+					char c = *in++;
+					if(c == '\n')
+						*spawndata++ = '\t';
+					else
+						*spawndata++ = c;
+				}
+				*spawndata = 0;
+			}
+		}
+		*/
+
+		// look for the spawn function
+		funcname = PRVM_GetString(prog, PRVM_alledictstring(ent, classname));
+		func = PRVM_ED_FindFunction (prog, va(vabuf, sizeof(vabuf), "spawnfunc_%s", funcname));
+		if(!func)
+			if(!PRVM_allglobalfloat(require_spawnfunc_prefix))
+				func = PRVM_ED_FindFunction (prog, funcname);
+
+		if (!func)
+		{
+			// check for OnEntityNoSpawnFunction
+			if (PRVM_serverfunction(SV_OnEntityNoSpawnFunction))
+			{
+				// self = ent
+				PRVM_serverglobalfloat(time) = sv.time;
+				PRVM_serverglobaledict(self) = PRVM_EDICT_TO_PROG(ent);
+				prog->ExecuteProgram(prog, PRVM_serverfunction(SV_OnEntityNoSpawnFunction), "QC function SV_OnEntityNoSpawnFunction is missing");
+			}
+			else
+			{
+				
+				Con_DPrint("No spawn function for:\n");
+				if (developer.integer > 0) // don't confuse non-developers with errors	
+					PRVM_ED_Print(prog, ent, NULL);
+
+				PRVM_ED_Free (prog, ent);
+				return false; // not included in "inhibited" count
+			}
+		}
+		else
+		{
+			// self = ent
+			PRVM_serverglobalfloat(time) = sv.time;
+			PRVM_allglobaledict(self) = PRVM_EDICT_TO_PROG(ent);
+			prog->ExecuteProgram(prog, func - prog->functions, "");
+		}
+		return true;
+	}
+	PRVM_ED_Free(prog, ent);
+	return false;
+}
+
+void PRVM_ED_CallPostspawnFunction (prvm_prog_t *prog, prvm_edict_t *ent)
+{
+	if(!ent->priv.server->free)
+	if (PRVM_serverfunction(SV_OnEntityPostSpawnFunction))
+	{
+		// self = ent
+		PRVM_serverglobalfloat(time) = sv.time;
+		PRVM_serverglobaledict(self) = PRVM_EDICT_TO_PROG(ent);
+		prog->ExecuteProgram(prog, PRVM_serverfunction(SV_OnEntityPostSpawnFunction), "QC function SV_OnEntityPostSpawnFunction is missing");
+	}
+}
+

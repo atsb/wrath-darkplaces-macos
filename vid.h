@@ -289,6 +289,19 @@ void VID_Restart_f(void);
 void VID_Start(void);
 void VID_Stop(void);
 
+// EXT_CONTROLLER_REKI
+typedef enum controllertype_e {
+	CONTROLLER_NULL,
+	CONTROLLER_GENERIC,
+	CONTROLLER_XBOX,
+	CONTROLLER_PLAYSTATION,
+	CONTROLLER_NINTENDO,
+	CONTROLLER_STEAM
+} controllertype_t;
+controllertype_t VID_ControllerType(int index);
+void VID_ControllerRumble(int index, float lowf, float highf, int msec);
+void VID_ControllerRumbleTriggers(int index, float leftf, float rightf, int msec);
+
 extern unsigned int vid_gammatables_serial; // so other subsystems can poll if gamma parameters have changed; this starts with 0 and gets increased by 1 each time the gamma parameters get changed and VID_BuildGammaTables should be called again
 extern qboolean vid_gammatables_trivial; // this is set to true if all color control values are at default setting, and it therefore would make no sense to use the gamma table
 void VID_BuildGammaTables(unsigned short *ramps, int rampsize); // builds the current gamma tables into an array (needs 3*rampsize items)

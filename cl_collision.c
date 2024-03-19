@@ -384,6 +384,7 @@ skipnetworkplayers:
 				continue;
 			// don't clip against any entities in the same clipgroup (DP_RM_CLIPGROUP)
 			if ((clipgroup & (int)PRVM_clientedictfloat(touch, clipgroup)) != 0)
+
 				continue;
 			// don't clip points against points (they can't collide)
 			if (VectorCompare(PRVM_clientedictvector(touch, mins), PRVM_clientedictvector(touch, maxs)) && (type != MOVE_MISSILE || !((int)PRVM_clientedictfloat(touch, flags) & FL_MONSTER)))
@@ -607,8 +608,7 @@ skipnetworkplayers:
 			if (passedictprog == PRVM_clientedictedict(touch, owner))
 				continue;
 			// don't clip against any entities in the same clipgroup (DP_RM_CLIPGROUP)
-			if ((clipgroup & (int)PRVM_clientedictfloat(touch, clipgroup)) != 0)
-				continue;
+if ((clipgroup & (int)PRVM_clientedictfloat(touch, clipgroup)) != 0)				continue;
 			// don't clip points against points (they can't collide)
 			if (VectorCompare(PRVM_clientedictvector(touch, mins), PRVM_clientedictvector(touch, maxs)) && (type != MOVE_MISSILE || !((int)PRVM_clientedictfloat(touch, flags) & FL_MONSTER)))
 				continue;
@@ -856,8 +856,8 @@ skipnetworkplayers:
 			if (passedictprog == PRVM_clientedictedict(touch, owner))
 				continue;
 			// don't clip against any entities in the same clipgroup (DP_RM_CLIPGROUP)
-			if ((clipgroup & (int)PRVM_clientedictfloat(touch, clipgroup)) != 0)
-				continue;
+if ((clipgroup & (int)PRVM_clientedictfloat(touch, clipgroup)) != 0)				continue;
+
 			// don't clip points against points (they can't collide)
 			if (pointtrace && VectorCompare(PRVM_clientedictvector(touch, mins), PRVM_clientedictvector(touch, maxs)) && (type != MOVE_MISSILE || !((int)PRVM_clientedictfloat(touch, flags) & FL_MONSTER)))
 				continue;

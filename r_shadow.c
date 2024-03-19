@@ -294,6 +294,7 @@ cvar_t r_shadow_realtime_dlight = {CVAR_SAVE, "r_shadow_realtime_dlight", "1", "
 cvar_t r_shadow_realtime_dlight_shadows = {CVAR_SAVE, "r_shadow_realtime_dlight_shadows", "1", "enables rendering of shadows from dynamic lights"};
 cvar_t r_shadow_realtime_dlight_svbspculling = {0, "r_shadow_realtime_dlight_svbspculling", "0", "enables svbsp optimization on dynamic lights (very slow!)"};
 cvar_t r_shadow_realtime_dlight_portalculling = {0, "r_shadow_realtime_dlight_portalculling", "0", "enables portal optimization on dynamic lights (slow!)"};
+cvar_t r_shadow_realtime_dlight_fadedist = { 0, "r_shadow_realtime_dlight_fadedist", "500", "distance in quake units to start fading dlights marked with PFLAGS_LODFADE" };
 cvar_t r_shadow_realtime_world = {CVAR_SAVE, "r_shadow_realtime_world", "0", "enables rendering of full world lighting (whether loaded from the map, or a .rtlights file, or a .ent file, or a .lights file produced by hlight)"};
 cvar_t r_shadow_realtime_world_lightmaps = {CVAR_SAVE, "r_shadow_realtime_world_lightmaps", "0", "brightness to render lightmaps when using full world lighting, try 0.5 for a tenebrae-like appearance"};
 cvar_t r_shadow_realtime_world_shadows = {CVAR_SAVE, "r_shadow_realtime_world_shadows", "1", "enables rendering of shadows from world lights"};
@@ -736,6 +737,7 @@ void R_Shadow_Init(void)
 	Cvar_RegisterVariable(&r_shadow_realtime_dlight_shadows);
 	Cvar_RegisterVariable(&r_shadow_realtime_dlight_svbspculling);
 	Cvar_RegisterVariable(&r_shadow_realtime_dlight_portalculling);
+	Cvar_RegisterVariable(&r_shadow_realtime_dlight_fadedist);
 	Cvar_RegisterVariable(&r_shadow_realtime_world);
 	Cvar_RegisterVariable(&r_shadow_realtime_world_lightmaps);
 	Cvar_RegisterVariable(&r_shadow_realtime_world_shadows);
@@ -3989,6 +3991,21 @@ static void R_Shadow_PrepareLight(rtlight_t *rtlight)
 	// if the light box is offscreen, skip it
 	if (R_CullBox(rtlight->cullmins, rtlight->cullmaxs))
 		return;
+	
+	// Reki (April 11 2023): Added LODFADE for fading far away lights
+	if (rtlight->flags & LIGHTFLAG_DISTANCEFADE && r_shadow_realtime_dlight_fadedist.integer)
+	{
+		vec3_t diff_vector;
+		float dist_from_camera;
+		VectorSubtract(r_refdef.view.origin, rtlight->shadoworigin, diff_vector);
+		dist_from_camera = max(0, VectorLength(diff_vector) - (r_shadow_realtime_dlight_fadedist.value));
+		f = 500 + (rtlight->radius * 4);
+		f = (f - dist_from_camera) / f;
+		f = bound(0, f, 1.0);
+		if (f <= 0)
+			return;
+		VectorScale(rtlight->currentcolor, f, rtlight->currentcolor);
+	}
 
 	VectorCopy(rtlight->cullmins, rtlight->cached_cullmins);
 	VectorCopy(rtlight->cullmaxs, rtlight->cached_cullmaxs);

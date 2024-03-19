@@ -412,7 +412,7 @@ extern cvar_t developer_loading;
 extern cvar_t sessionid;
 
 #define STARTCONFIGFILENAME "wrath.rc"
-#define CONFIGFILENAME "config.cfg"
+#define CONFIGFILENAME "wrath.cfg"
 
 /* Preprocessor macros to identify platform
     DP_OS_NAME 	- "friendly" name of the OS, for humans to read
@@ -550,6 +550,8 @@ void Sys_Shared_Init(void);
 // This also includes extended characters, and ALL control chars
 #define ISWHITESPACEORCONTROL(ch) ((signed char) (ch) <= (signed char) ' ')
 
+// Reki (April 17 2023): Get true slowmo value
+#define SLOWMO (slowmo.value * sv.timescale)
 
 #ifdef PRVM_64
 #define FLOAT_IS_TRUE_FOR_INT(x) ((x) & 0x7FFFFFFFFFFFFFFF) // also match "negative zero" doubles of value 0x8000000000000000

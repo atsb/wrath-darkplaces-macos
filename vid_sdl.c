@@ -60,6 +60,8 @@ io_connect_t IN_GetIOHandle(void)
 #define SDL_R_RESTART
 #endif
 
+#define SDL_ALLOW_XINPUT 0
+
 // Tell startup code that we have a client
 int cl_available = true;
 
@@ -74,6 +76,7 @@ static qboolean vid_isfullscreen;
 static qboolean vid_usingvsync = false;
 #endif
 static SDL_Joystick *vid_sdljoystick = NULL;
+static SDL_GameController *vid_sdlcontroller = NULL;
 // GAME_STEELSTORM specific
 static cvar_t *steelstorm_showing_map = NULL; // detect but do not create the cvar
 static cvar_t *steelstorm_showing_mousecursor = NULL; // detect but do not create the cvar
@@ -734,7 +737,91 @@ void VID_BuildJoyState(vid_joystate_t *joystate)
 {
 	VID_Shared_BuildJoyState_Begin(joystate);
 
-	if (vid_sdljoystick)
+	if (vid_sdlcontroller)
+	{
+		joystate->is360 = true;
+		SDL_GameController *controller = vid_sdlcontroller;
+		int j;
+		int n;
+		
+		// update axis by standard mapping
+		typedef struct {
+			SDL_GameControllerAxis axis;
+			qboolean invert;
+		} axis_t;
+
+		typedef struct {
+			SDL_GameControllerAxis axis;
+			int threshold;
+		} axisbutton_t;
+
+		axis_t axisList[] = {
+			{SDL_CONTROLLER_AXIS_LEFTX, false},
+			{SDL_CONTROLLER_AXIS_LEFTY, true},
+			{SDL_CONTROLLER_AXIS_RIGHTX, false},
+			{SDL_CONTROLLER_AXIS_RIGHTY, true},
+			{SDL_CONTROLLER_AXIS_TRIGGERLEFT, false},
+			{SDL_CONTROLLER_AXIS_TRIGGERRIGHT, false}
+		};
+
+		SDL_GameControllerButton buttonList[] = {
+			SDL_CONTROLLER_BUTTON_DPAD_UP,
+			SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+			SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+			SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+			SDL_CONTROLLER_BUTTON_START,
+			SDL_CONTROLLER_BUTTON_BACK,
+			SDL_CONTROLLER_BUTTON_LEFTSTICK,
+			SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+			SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+			SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+			SDL_CONTROLLER_BUTTON_A,
+			SDL_CONTROLLER_BUTTON_B,
+			SDL_CONTROLLER_BUTTON_X,
+			SDL_CONTROLLER_BUTTON_Y,
+			//SDL_CONTROLLER_BUTTON_GUIDE,
+			//SDL_CONTROLLER_BUTTON_MISC1,
+			//SDL_CONTROLLER_BUTTON_PADDLE1,
+			//SDL_CONTROLLER_BUTTON_PADDLE2,
+			//SDL_CONTROLLER_BUTTON_PADDLE3,
+			//SDL_CONTROLLER_BUTTON_PADDLE4,
+			//SDL_CONTROLLER_BUTTON_TOUCHPAD
+		};
+
+		axisbutton_t axisButtonList[] = {
+			{SDL_CONTROLLER_AXIS_TRIGGERLEFT, 3854.0f},
+			{SDL_CONTROLLER_AXIS_TRIGGERRIGHT, 3854.0f},
+			{SDL_CONTROLLER_AXIS_LEFTY, 16384.0f},
+			{SDL_CONTROLLER_AXIS_LEFTY, -16384.0f},
+			{SDL_CONTROLLER_AXIS_LEFTX, -16384.0f},
+			{SDL_CONTROLLER_AXIS_LEFTX, 16384.0f},
+			{SDL_CONTROLLER_AXIS_RIGHTY, 16384.0f},
+			{SDL_CONTROLLER_AXIS_RIGHTY, -16384.0f},
+			{SDL_CONTROLLER_AXIS_RIGHTX, -16384.0f},
+			{SDL_CONTROLLER_AXIS_RIGHTX, 16384.0f}
+		};
+
+		for(j = 0; j < (sizeof(axisList) / sizeof(axis_t)); j++)
+		{
+			joystate->axis[j] = SDL_GameControllerGetAxis(controller, axisList[j].axis) * (1.0f / 32767.0f) * (axisList[j].invert ? -1 : 1);
+		}
+		
+		for(j = 0; j < (sizeof(buttonList) / sizeof(SDL_GameControllerButton)); j++)
+		{
+			joystate->button[j] = SDL_GameControllerGetButton(controller, buttonList[j]);
+		}
+
+		for(n = 0; n < (sizeof(axisButtonList) / sizeof(axisbutton_t)); j++, n++)
+		{
+			axisbutton_t *axisbutton = &axisButtonList[n];
+			joystate->button[j] = (axisbutton->threshold > 0) ? 
+					(SDL_GameControllerGetAxis(controller, axisbutton->axis) >= axisbutton->threshold) : 
+					(SDL_GameControllerGetAxis(controller, axisbutton->axis) <= axisbutton->threshold);
+		}
+
+
+	}
+	else if (vid_sdljoystick)
 	{
 		SDL_Joystick *joy = vid_sdljoystick;
 		int j;
@@ -742,10 +829,16 @@ void VID_BuildJoyState(vid_joystate_t *joystate)
 		int numbuttons;
 		numaxes = SDL_JoystickNumAxes(joy);
 		for (j = 0;j < numaxes;j++)
+		{
 			joystate->axis[j] = SDL_JoystickGetAxis(joy, j) * (1.0f / 32767.0f);
+			//Con_DPrintf("SDL Axis %i: %.4f\n", j, joystate->axis[j]);
+		}
 		numbuttons = SDL_JoystickNumButtons(joy);
 		for (j = 0;j < numbuttons;j++)
+		{
 			joystate->button[j] = SDL_JoystickGetButton(joy, j);
+			//Con_DPrintf("SDL Button %i: %i\n", j, joystate->button[j]);
+		}
 	}
 
 	VID_Shared_BuildJoyState_Finish(joystate);
@@ -980,7 +1073,6 @@ static void IN_Move_TouchScreen_Quake(void)
 
 void IN_Move( void )
 {
-	static int old_x = 0, old_y = 0;
 	static int stuck = 0;
 	int x, y;
 	vid_joystate_t joystate;
@@ -1020,12 +1112,12 @@ void IN_Move( void )
 					SDL_GetRelativeMouseState(&x, &y);
 					++stuck;
 				} else {
+					// Reki (April 21 2023): Removed the old_x/old_y since that just seemed to double mouse inputs?
+					// not sure why that was there in the first place since it seems to work fine without it.
 					SDL_GetRelativeMouseState(&x, &y);
-					in_mouse_x = x + old_x;
-					in_mouse_y = y + old_y;
+					in_mouse_x = x;// +old_x;
+					in_mouse_y = y;// +old_y;
 					SDL_GetMouseState(&x, &y);
-					old_x = x - win_half_width;
-					old_y = y - win_half_height;
 #if SDL_MAJOR_VERSION == 1
 					SDL_WarpMouse(win_half_width, win_half_height);
 #else
@@ -1226,9 +1318,9 @@ void Sys_SendKeyEvents( void )
 			case SDL_KEYUP:
 #ifdef DEBUGSDLEVENTS
 				if (event.type == SDL_KEYDOWN)
-					Con_DPrintf("SDL_Event: SDL_KEYDOWN %i unicode %i\n", event.key.keysym.sym, event.key.keysym.unicode);
+					Con_DPrintf("SDL_Event: SDL_KEYDOWN %i unicode %i\n", event.key.keysym.sym, event.key.keysym.scancode);
 				else
-					Con_DPrintf("SDL_Event: SDL_KEYUP %i unicode %i\n", event.key.keysym.sym, event.key.keysym.unicode);
+					Con_DPrintf("SDL_Event: SDL_KEYUP %i unicode %i\n", event.key.keysym.sym, event.key.keysym.scancode);
 #endif
 				keycode = MapKey(event.key.keysym.sym);
 				if (!VID_JoyBlockEmulatedKeys(keycode))
@@ -2069,9 +2161,10 @@ void VID_Init (void)
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
 		Sys_Error ("Failed to init SDL video subsystem: %s", SDL_GetError());
-	vid_sdl_initjoysticksystem = SDL_InitSubSystem(SDL_INIT_JOYSTICK) >= 0;
+	vid_sdl_initjoysticksystem = SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) >= 0;
 	if (vid_sdl_initjoysticksystem)
 		Con_Printf("Failed to init SDL joystick subsystem: %s\n", SDL_GetError());
+	
 	vid_isfullscreen = false;
 }
 
@@ -2083,7 +2176,9 @@ void VID_EnableJoystick(qboolean enable)
 	qboolean success = false;
 	int sharedcount = 0;
 	int sdlindex = -1;
+	#if SDL_ALLOW_XINPUT
 	sharedcount = VID_Shared_SetJoystick(index);
+	#endif
 	if (index >= 0 && index < sharedcount)
 		success = true;
 	sdlindex = index - sharedcount;
@@ -2101,24 +2196,48 @@ void VID_EnableJoystick(qboolean enable)
 		vid_sdljoystickindex = sdlindex;
 		// close SDL joystick if active
 		if (vid_sdljoystick)
-			SDL_JoystickClose(vid_sdljoystick);
+		{
+			// if (SDL_IsGameController(vid_sdljoystick))
+			// 	SDL_GameControllerClose(vid_sdljoystick);
+			// else
+				SDL_JoystickClose(vid_sdljoystick);
+		}
+		vid_sdlcontroller = NULL;
 		vid_sdljoystick = NULL;
 		if (sdlindex >= 0)
 		{
-			vid_sdljoystick = SDL_JoystickOpen(sdlindex);
-			if (vid_sdljoystick)
+			if (SDL_IsGameController(sdlindex))
 			{
-#if SDL_MAJOR_VERSION == 1
-				const char *joystickname = SDL_JoystickName(sdlindex);
-#else
-				const char *joystickname = SDL_JoystickName(vid_sdljoystick);
-#endif
-				Con_Printf("Joystick %i opened (SDL_Joystick %i is \"%s\" with %i axes, %i buttons, %i balls)\n", index, sdlindex, joystickname, (int)SDL_JoystickNumAxes(vid_sdljoystick), (int)SDL_JoystickNumButtons(vid_sdljoystick), (int)SDL_JoystickNumBalls(vid_sdljoystick));
+				vid_sdljoystick = SDL_GameControllerOpen(sdlindex);
+				vid_sdlcontroller = vid_sdljoystick;
+				if (vid_sdljoystick)
+				{
+					const char *joystickname = SDL_GameControllerName(vid_sdljoystick);
+					Con_Printf("GameController %i opened (SDL_GameController %i is \"%s\")\n", index, sdlindex, joystickname);
+				}
+				else
+				{
+					Con_Printf("GameController %i failed (SDL_GameControllerOpen(%i) returned: %s)\n", index, sdlindex, SDL_GetError());
+					sdlindex = -1;
+				}
 			}
 			else
 			{
-				Con_Printf("Joystick %i failed (SDL_JoystickOpen(%i) returned: %s)\n", index, sdlindex, SDL_GetError());
-				sdlindex = -1;
+				vid_sdljoystick = SDL_JoystickOpen(sdlindex);
+				if (vid_sdljoystick)
+				{
+#if SDL_MAJOR_VERSION == 1
+					const char *joystickname = SDL_JoystickName(sdlindex);
+#else
+					const char *joystickname = SDL_JoystickName(vid_sdljoystick);
+#endif
+					Con_Printf("Joystick %i opened (SDL_Joystick %i is \"%s\" with %i axes, %i buttons, %i balls)\n", index, sdlindex, joystickname, (int)SDL_JoystickNumAxes(vid_sdljoystick), (int)SDL_JoystickNumButtons(vid_sdljoystick), (int)SDL_JoystickNumBalls(vid_sdljoystick));
+				}
+				else
+				{
+					Con_Printf("Joystick %i failed (SDL_JoystickOpen(%i) returned: %s)\n", index, sdlindex, SDL_GetError());
+					sdlindex = -1;
+				}
 			}
 		}
 	}
@@ -2819,6 +2938,62 @@ int VID_GetGamma (unsigned short *ramps, int rampsize)
 #else
 	return !SDL_GetWindowGammaRamp (window, ramps, ramps + rampsize, ramps + rampsize*2);
 #endif
+}
+
+controllertype_t VID_ControllerType(int index)
+{
+	#if SDL_ALLOW_XINPUT
+	index -= VID_Shared_SetJoystick(-1); // offset xinput devices
+	#endif
+
+	if (index >= SDL_NumJoysticks())
+		return CONTROLLER_NULL;
+
+	SDL_GameControllerType sdltype = SDL_GameControllerTypeForIndex(index);
+	// icky hardcode... oh well
+	if (sdltype == SDL_CONTROLLER_TYPE_XBOX360 || sdltype == SDL_CONTROLLER_TYPE_XBOXONE)
+		return CONTROLLER_XBOX;
+	else if (sdltype == SDL_CONTROLLER_TYPE_PS3 || sdltype == SDL_CONTROLLER_TYPE_PS4 || sdltype == SDL_CONTROLLER_TYPE_PS5)
+		return CONTROLLER_PLAYSTATION;
+	else if (sdltype == SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO || sdltype == SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_PAIR)
+		return CONTROLLER_NINTENDO;
+	else if (sdltype == SDL_CONTROLLER_TYPE_VIRTUAL)
+		return CONTROLLER_STEAM;
+	return CONTROLLER_GENERIC;
+}
+
+void VID_ControllerRumble(int index, float lowf, float highf, int msec)
+{
+	#if SDL_ALLOW_XINPUT
+	index -= VID_Shared_SetJoystick(-1); // offset xinput devices
+	#endif
+
+	if (index < 0) // this should go to an xinput controller!
+		return;
+
+	if (index >= SDL_NumJoysticks()) // invalid controller, naughty naughty
+		return;
+
+	// we're just gonna ignore index... sorry :(, should fix that in the future!
+	SDL_GameController *controller = vid_sdlcontroller;
+	SDL_GameControllerRumble(controller, (0xFFFF * lowf), (0xFFFF * highf), msec);
+}
+
+void VID_ControllerRumbleTriggers(int index, float leftf, float rightf, int msec)
+{
+	#if SDL_ALLOW_XINPUT
+	index -= VID_Shared_SetJoystick(-1); // offset xinput devices
+	#endif
+
+	if (index < 0) // this should go to an xinput controller!
+		return;
+
+	if (index >= SDL_NumJoysticks()) // invalid controller, naughty naughty
+		return;
+
+	// we're just gonna ignore index... sorry :(, should fix that in the future!
+	SDL_GameController *controller = vid_sdlcontroller;
+	SDL_GameControllerRumbleTriggers(controller, (0xFFFF * leftf), (0xFFFF * rightf), msec);
 }
 
 void VID_Finish (void)

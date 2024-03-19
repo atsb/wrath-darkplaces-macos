@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "r_shadow.h"
 #include "libcurl.h"
 #include "snd_main.h"
+#include "cl_steam.h"
 
 // we need to declare some mouse variables here, because the menu system
 // references them even when on a unix system.
@@ -1540,8 +1541,8 @@ static void CL_LinkNetworkEntity(entity_t *e)
 		// FIXME: add ambient/diffuse/specular scales as an extension ontop of TENEBRAE_GFX_DLIGHTS?
 		Matrix4x4_Normalize(&dlightmatrix, &e->render.matrix);
 		Matrix4x4_Scale(&dlightmatrix, light[3], 1);
-		R_RTLight_Update(&r_refdef.scene.templights[r_refdef.scene.numlights], false, &dlightmatrix, light, e->state_current.lightstyle, e->state_current.skin > 0 ? va(vabuf, sizeof(vabuf), "cubemaps/%i", e->state_current.skin) : NULL, !(e->state_current.lightpflags & PFLAGS_NOSHADOW), (e->state_current.lightpflags & PFLAGS_CORONA) != 0, 0.25, 0, 1, 1, LIGHTFLAG_NORMALMODE | LIGHTFLAG_REALTIMEMODE);
-		r_refdef.scene.lights[r_refdef.scene.numlights] = &r_refdef.scene.templights[r_refdef.scene.numlights];r_refdef.scene.numlights++;
+		R_RTLight_Update(&r_refdef.scene.templights[r_refdef.scene.numlights], false, &dlightmatrix, light, e->state_current.lightstyle, e->state_current.skin > 0 ? va(vabuf, sizeof(vabuf), "cubemaps/%i", e->state_current.skin) : NULL, !(e->state_current.lightpflags & PFLAGS_NOSHADOW), (e->state_current.lightpflags & PFLAGS_CORONA) != 0, 0.25, 0, 1, 1, LIGHTFLAG_NORMALMODE | LIGHTFLAG_REALTIMEMODE | (e->state_current.lightpflags & PFLAGS_LODFADE ? LIGHTFLAG_DISTANCEFADE : 0));
+		r_refdef.scene.lights[r_refdef.scene.numlights] = &r_refdef.scene.templights[r_refdef.scene.numlights]; r_refdef.scene.numlights++;
 	}
 	// make the glow dlight
 	else if (dlightradius > 0 && (dlightcolor[0] || dlightcolor[1] || dlightcolor[2]) && !(e->render.flags & RENDER_VIEWMODEL) && r_refdef.scene.numlights < MAX_DLIGHTS)
@@ -1947,6 +1948,9 @@ void CL_UpdateWorld(void)
 
 		// decals, particles, and explosions will be updated during rneder
 	}
+
+	// Reki (May 4 2023): Run steam tick every render frame
+	Steam_Tick();
 
 	r_refdef.scene.time = cl.time;
 }
@@ -2499,4 +2503,6 @@ void CL_Init (void)
 	CL_Screen_Init();
 
 	CL_Video_Init();
+
+	Steam_Startup();
 }

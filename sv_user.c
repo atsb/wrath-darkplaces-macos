@@ -133,6 +133,9 @@ static void SV_UserFriction (void)
 	else
 		friction = sv_friction.value;
 
+	if (PRVM_serveredictfloat(host_client->edict, friction) > 0) // Reki (September 19 2023): Added QC field friction
+		friction *= PRVM_serveredictfloat(host_client->edict, friction);
+
 	// apply friction
 	control = speed < sv_stopspeed.value ? sv_stopspeed.value : speed;
 	newspeed = speed - sv.frametime*control*friction;
@@ -477,6 +480,8 @@ static void SV_ReadClientMove (void)
 	if (sv.protocol != PROTOCOL_QUAKE && sv.protocol != PROTOCOL_QUAKEDP && sv.protocol != PROTOCOL_NEHAHRAMOVIE && sv.protocol != PROTOCOL_NEHAHRABJP && sv.protocol != PROTOCOL_NEHAHRABJP2 && sv.protocol != PROTOCOL_NEHAHRABJP3 && sv.protocol != PROTOCOL_DARKPLACES1 && sv.protocol != PROTOCOL_DARKPLACES2 && sv.protocol != PROTOCOL_DARKPLACES3 && sv.protocol != PROTOCOL_DARKPLACES4 && sv.protocol != PROTOCOL_DARKPLACES5 && sv.protocol != PROTOCOL_DARKPLACES6)
 		move->sequence = MSG_ReadLong(&sv_message);
 	move->time = move->clienttime = MSG_ReadFloat(&sv_message);
+	if (sv.protocol == PROTOCOL_WRATH)
+		move->msec = MSG_ReadByte(&sv_message);
 	if (sv_message.badread) Con_Printf("SV_ReadClientMessage: badread at %s:%i\n", __FILE__, __LINE__);
 	move->receivetime = (float)sv.time;
 
@@ -488,16 +493,25 @@ static void SV_ReadClientMove (void)
 	move->time = min(move->time, move->receivetime + sv.frametime);
 
 	// read current angles
-	for (i = 0;i < 3;i++)
+	if (sv.protocol == PROTOCOL_WRATH)
 	{
-		if (sv.protocol == PROTOCOL_QUAKE || sv.protocol == PROTOCOL_QUAKEDP || sv.protocol == PROTOCOL_NEHAHRAMOVIE || sv.protocol == PROTOCOL_NEHAHRABJP || sv.protocol == PROTOCOL_NEHAHRABJP2 || sv.protocol == PROTOCOL_NEHAHRABJP3)
-			move->viewangles[i] = MSG_ReadAngle8i(&sv_message);
-		else if (sv.protocol == PROTOCOL_DARKPLACES1)
-			move->viewangles[i] = MSG_ReadAngle16i(&sv_message);
-		else if (sv.protocol == PROTOCOL_DARKPLACES2 || sv.protocol == PROTOCOL_DARKPLACES3)
-			move->viewangles[i] = MSG_ReadAngle32f(&sv_message);
-		else
-			move->viewangles[i] = MSG_ReadAngle16i(&sv_message);
+		move->viewangles[0] = MSG_ReadAngle32f(&sv_message);
+		move->viewangles[1] = MSG_ReadAngle32f(&sv_message);
+		move->viewangles[2] = MSG_ReadAngle16i(&sv_message);
+	}
+	else
+	{
+		for (i = 0; i < 3; i++)
+		{
+			if (sv.protocol == PROTOCOL_QUAKE || sv.protocol == PROTOCOL_QUAKEDP || sv.protocol == PROTOCOL_NEHAHRAMOVIE || sv.protocol == PROTOCOL_NEHAHRABJP || sv.protocol == PROTOCOL_NEHAHRABJP2 || sv.protocol == PROTOCOL_NEHAHRABJP3)
+				move->viewangles[i] = MSG_ReadAngle8i(&sv_message);
+			else if (sv.protocol == PROTOCOL_DARKPLACES1)
+				move->viewangles[i] = MSG_ReadAngle16i(&sv_message);
+			else if (sv.protocol == PROTOCOL_DARKPLACES2 || sv.protocol == PROTOCOL_DARKPLACES3)
+				move->viewangles[i] = MSG_ReadAngle32f(&sv_message);
+			else
+				move->viewangles[i] = MSG_ReadAngle16i(&sv_message);
+		}
 	}
 	if (sv_message.badread) Con_Printf("SV_ReadClientMessage: badread at %s:%i\n", __FILE__, __LINE__);
 
@@ -611,7 +625,7 @@ static void SV_ExecuteClientMoves(void)
 	if (ceil(max(sv_readmoves[sv_numreadmoves-1].receivetime - sv_readmoves[sv_numreadmoves-1].time, 0) * 1000.0) < sv_clmovement_minping.integer)
 		host_client->clmovement_disabletimeout = realtime + sv_clmovement_minping_disabletime.value / 1000.0;
 	// several conditions govern whether clientside movement prediction is allowed
-	if (sv_readmoves[sv_numreadmoves-1].sequence && sv_clmovement_enable.integer && sv_clmovement_inputtimeout.value > 0 && host_client->clmovement_disabletimeout <= realtime && PRVM_serveredictfloat(host_client->edict, movetype) == MOVETYPE_WALK && (!PRVM_serveredictfloat(host_client->edict, disableclientprediction)))
+	if (sv_readmoves[sv_numreadmoves-1].sequence && sv_clmovement_enable.integer && sv_clmovement_inputtimeout.value > 0 && host_client->clmovement_disabletimeout <= realtime && (!PRVM_serveredictfloat(host_client->edict, disableclientprediction)))
 	{
 		// process the moves in order and ignore old ones
 		// but always trust the latest move
@@ -630,6 +644,9 @@ static void SV_ExecuteClientMoves(void)
 				move->time = bound(sv.time - 1, move->time, sv.time); // prevent slowhack/speedhack combos
 				move->time = max(move->time, host_client->cmd.time); // prevent backstepping of time
 				moveframetime = bound(0, move->time - host_client->cmd.time, min(0.1, sv_clmovement_inputtimeout.value));
+				move->frametime = moveframetime;
+				if (sv.protocol == PROTOCOL_WRATH)
+					move->frametime = (float)move->msec / 1000;
 
 				// discard (treat like lost) moves with too low distance from
 				// the previous one to prevent hacks using float inaccuracy
@@ -778,6 +795,12 @@ void SV_ApplyClientMove (void)
 	PRVM_serveredictfloat(host_client->edict, ping) = host_client->ping * 1000.0;
 	PRVM_serveredictfloat(host_client->edict, ping_packetloss) = packetloss / (float) NETGRAPH_PACKETS;
 	PRVM_serveredictfloat(host_client->edict, ping_movementloss) = movementloss / (float) NETGRAPH_PACKETS;
+
+	PRVM_serverglobalfloat(input_timelength) = move->frametime;
+	PRVM_serverglobalfloat(input_buttons) = move->buttons;
+	PRVM_serverglobalfloat(input_impulse) = move->impulse;
+	VectorCopy(move->viewangles, PRVM_serverglobalvector(input_angles));
+	VectorSet(PRVM_serverglobalvector(input_movevalues), move->forwardmove, move->sidemove, move->upmove);
 }
 
 static void SV_FrameLost(int framenum)

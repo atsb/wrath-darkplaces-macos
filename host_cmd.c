@@ -1695,6 +1695,25 @@ static void Host_BottomColor_f(void)
 	Host_Color(-1, atoi(Cmd_Argv(1)));
 }
 
+static void Host_ProtocolVersion_f(void)
+{
+	if (host_client->protocolversion)
+		return;
+
+	if (sv.protocol != PROTOCOL_WRATH) // we only support this with the WRATH protocol
+		return;
+
+	unsigned int proto_version = atoi(Cmd_Argv(1));
+	if (proto_version > PROTOCOL_WRATH_CURRENT)
+		proto_version = PROTOCOL_WRATH_CURRENT;
+
+	MSG_WriteByte(&host_client->netconnection->message, svc_signonnum);
+	MSG_WriteByte(&host_client->netconnection->message, 101);
+	MSG_WriteLong(&host_client->netconnection->message, proto_version);
+
+	host_client->protocolversion = proto_version;
+}
+
 cvar_t cl_rate = {CVAR_SAVE | CVAR_NQUSERINFOHACK, "_cl_rate", "20000", "internal storage cvar for current rate (changed by rate command)"};
 cvar_t cl_rate_burstsize = {CVAR_SAVE | CVAR_NQUSERINFOHACK, "_cl_rate_burstsize", "1024", "internal storage cvar for current rate control burst size (changed by rate_burstsize command)"};
 static void Host_Rate_f(void)
@@ -2391,6 +2410,223 @@ static void Host_Viewprev_f (void)
 	}
 }
 
+static void Host_Ent_Create_f (void)
+{
+	prvm_prog_t *prog = SVVM_prog;
+	prvm_edict_t *ed;
+	ddef_t *key;
+	int i;
+	qboolean haveorigin;
+	const qboolean have_client = (cmd_source == src_client);
+
+	void (*print)(const char *, ...) = (cmd_source == src_client ? SV_ClientPrintf : Con_Printf);
+
+	if(Cmd_Argc() < 2)
+		return;
+
+	if (!allowcheats)
+	{
+		print("No cheats allowed, use sv_cheats 1 and restart level to enable.\n");
+		return;
+	}
+
+	ed = PRVM_ED_Alloc(SVVM_prog);
+
+	PRVM_ED_ParseEpair(prog, ed, PRVM_ED_FindField(prog, "classname"), Cmd_Argv(1), false);
+
+	// Spawn where the player is aiming. We need a view matrix first.
+	if(have_client)
+	{
+		vec3_t org, temp, dest;
+		matrix4x4_t view;
+		trace_t trace;
+		char buf[128];
+
+		SV_GetEntityMatrix(prog, host_client->edict, &view, true);
+
+		Matrix4x4_OriginFromMatrix(&view, org);
+		VectorSet(temp, 65536, 0, 0);
+		Matrix4x4_Transform(&view, temp, dest);		
+
+		trace = SV_TraceLine(org, dest, MOVE_NORMAL, NULL, SUPERCONTENTS_SOLID | SUPERCONTENTS_BODY, collision_extendmovelength.value);
+
+		dpsnprintf(buf, sizeof(buf), "%g %g %g", trace.endpos[0], trace.endpos[1], trace.endpos[2]);
+		PRVM_ED_ParseEpair(prog, ed, PRVM_ED_FindField(prog, "origin"), buf, false);
+
+		haveorigin = true;
+	}
+	// Or spawn at a specified origin.
+	else
+	{
+		print = Con_Printf;
+		haveorigin = false;
+	}
+
+	// Allow more than one key/value pair by cycling between expecting either one.
+	for(i = 2; i < Cmd_Argc(); i += 2)
+	{
+		if(!(key = PRVM_ED_FindField(prog, Cmd_Argv(i))))
+		{
+			print("Key %s not found!\n", Cmd_Argv(i));
+			PRVM_ED_Free(prog, ed);
+			return;
+		}
+
+		/*
+		 * This is mostly for dedicated server console, but if the
+		 * player gave a custom origin, we can ignore the traceline.
+		 */
+		if(!strcmp(Cmd_Argv(i), "origin"))
+			haveorigin = true;
+
+		if (i + 1 < Cmd_Argc())
+			PRVM_ED_ParseEpair(prog, ed, key, Cmd_Argv(i+1), false);
+	}
+
+	if(!haveorigin)
+	{
+		print("Missing origin\n");
+		PRVM_ED_Free(prog, ed);
+		return;
+	}
+
+	// Spawn it
+	PRVM_ED_CallPrespawnFunction(prog, ed);
+	
+	if(!PRVM_ED_CallSpawnFunction(prog, ed, NULL, NULL))
+	{
+		print("Could not spawn a \"%s\". No such entity or it has no spawn function\n", Cmd_Argv(1));
+		if(have_client)
+			Con_Printf("%s tried to spawn a \"%s\"\n", host_client->name, Cmd_Argv(1));
+		// CallSpawnFunction already freed the edict for us.
+		return;
+	}
+
+	PRVM_ED_CallPostspawnFunction(prog, ed);	
+
+	// Make it appear in the world
+	SV_LinkEdict(ed);
+
+	if(have_client)
+		Con_Printf("%s spawned a \"%s\"\n", host_client->name, Cmd_Argv(1));
+}
+
+static void Host_Ent_Remove_f (void)
+{
+	prvm_prog_t *prog = SVVM_prog;
+	prvm_edict_t *ed;
+	int i, ednum = 0;
+	const qboolean have_client = (cmd_source == src_client);
+	void (*print)(const char *, ...) = (cmd_source == src_client ? SV_ClientPrintf : Con_Printf);
+
+	if(Cmd_Argc() < 2)
+		return;
+
+	if (!allowcheats)
+	{
+		print("No cheats allowed, use sv_cheats 1 and restart level to enable.\n");
+		return;
+	}
+
+	// Allow specifying edict by number
+	if(Cmd_Argc() > 1 && Cmd_Argv(1))
+	{
+		ednum = atoi(Cmd_Argv(1));
+		if(!ednum)
+		{
+			print("Cannot remove the world\n");
+			return;
+		}
+	}
+	// Or trace a line if it's a client who didn't specify one.
+	else if(have_client)
+	{
+		vec3_t org, temp, dest;
+		matrix4x4_t view;
+		trace_t trace;
+
+		SV_GetEntityMatrix(prog, host_client->edict, &view, true);
+
+		Matrix4x4_OriginFromMatrix(&view, org);
+		VectorSet(temp, 65536, 0, 0);
+		Matrix4x4_Transform(&view, temp, dest);		
+
+		trace = SV_TraceLine(org, dest, MOVE_NORMAL, NULL, SUPERCONTENTS_SOLID | SUPERCONTENTS_BODY, collision_extendmovelength.value);
+		
+		if(trace.ent)
+			ednum = (int)PRVM_EDICT_TO_PROG(trace.ent);
+		if(!trace.ent || !ednum)
+			// Don't remove the world, but don't annoy players with a print if they miss
+			return;
+	}
+	else
+	{
+		// Only a dedicated server console should be able to reach this.
+		print("No edict given\n");
+		return;
+	}
+
+	ed = PRVM_EDICT_NUM(ednum);
+
+	if(ed)
+	{
+		// Skip players
+		for (i = 0; i < svs.maxclients; i++)
+		{
+			if(ed == svs.clients[i].edict)
+				return;
+		}
+
+		if(!ed->priv.server->free)
+		{
+			print("Removed a \"%s\"\n", PRVM_GetString(prog, PRVM_serveredictstring(ed, classname)));
+			PRVM_ED_ClearEdict(prog, ed);
+			PRVM_ED_Free(prog, ed);
+		}
+	}
+	else
+	{
+		// This should only be reachable if an invalid edict number was given
+		print("No such entity\n");
+		return;
+	}
+}
+
+static void Host_Ent_Remove_All_f (void)
+{
+	prvm_prog_t *prog = SVVM_prog;
+	int i, rmcount;
+	prvm_edict_t *ed;
+	void (*print)(const char *, ...) = (cmd_source == src_client ? SV_ClientPrintf : Con_Printf);
+
+	if (!allowcheats)
+	{
+		print("No cheats allowed, use sv_cheats 1 and restart level to enable.\n");
+		return;
+	}
+
+	for (i = 0, rmcount = 0, ed = PRVM_EDICT_NUM(i); i < prog->num_edicts; i++, ed = PRVM_NEXT_EDICT(ed))
+	{
+		if(!ed->priv.server->free && !strcmp(PRVM_GetString(prog, PRVM_serveredictstring(ed, classname)), Cmd_Argv(1)))
+		{
+			if(!i)
+			{
+				print("Cannot remove the world\n");
+				return;
+			}
+			PRVM_ED_ClearEdict(prog, ed);
+			PRVM_ED_Free(prog, ed);
+			rmcount++;
+		}
+	}
+
+	if(!rmcount)
+		print("No \"%s\" found\n", Cmd_Argv(1));
+	else
+		print("Removed %i of \"%s\"\n", rmcount, Cmd_Argv(1));
+}
+
+
 /*
 ===============================================================================
 
@@ -2466,7 +2702,7 @@ static void Host_Stopdemo_f (void)
 	if (!cls.demoplayback)
 		return;
 	CL_Disconnect ();
-	Host_ShutdownServer ();
+	//Host_ShutdownServer ();
 }
 
 static void Host_SendCvar_f (void)
@@ -3040,6 +3276,13 @@ void Host_InitCommands (void)
 	Cmd_AddCommand ("viewnext", Host_Viewnext_f, "change to next animation frame of viewthing entity in current level");
 	Cmd_AddCommand ("viewprev", Host_Viewprev_f, "change to previous animation frame of viewthing entity in current level");
 
+	// FIXME: these are supposed to work on a dedicated as well, but if we fill in both pointers, the game
+	// always prefers the server command when you call it from the local client; that is changed in upstream
+	Cmd_AddCommand_WithClientCommand ("ent_create", NULL, Host_Ent_Create_f, "Creates an entity at the specified coordinate, of the specified classname. If executed from a server, origin has to be specified manually.");
+	Cmd_AddCommand_WithClientCommand ("ent_remove_all", NULL, Host_Ent_Remove_All_f, "Removes all entities of the specified classname");
+	Cmd_AddCommand_WithClientCommand ("ent_remove", NULL, Host_Ent_Remove_f, "Removes an entity by number, or the entity you're aiming at");
+	
+	Cmd_AddCommand_WithClientCommand("protocolver", NULL, Host_ProtocolVersion_f, "set protocol subversion");
 	Cvar_RegisterVariable (&cl_name);
 	Cmd_AddCommand_WithClientCommand ("name", Host_Name_f, Host_Name_f, "change your player name");
 	Cvar_RegisterVariable (&cl_color);

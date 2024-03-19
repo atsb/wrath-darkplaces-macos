@@ -43,6 +43,8 @@ cvar_t scr_loadingscreen_scale = {0, "scr_loadingscreen_scale","1", "scale facto
 cvar_t scr_loadingscreen_scale_base = {0, "scr_loadingscreen_scale_base","0", "0 = console pixels, 1 = video pixels"};
 cvar_t scr_loadingscreen_scale_limit = {0, "scr_loadingscreen_scale_limit","0", "0 = no limit, 1 = until first edge hits screen edge, 2 = until last edge hits screen edge, 3 = until width hits screen width, 4 = until height hits screen height"};
 cvar_t scr_loadingscreen_picture = {0, "scr_loadingscreen_picture", "gfx/splashes/_blank", "picture shown during loading"};
+cvar_t scr_loadingscreen_mapname = {0, "scr_loadingscreen_mapname", "", "map shown during loading"};
+cvar_t scr_loadingscreen_waiting = {0, "scr_loadingscreen_waiting", "0", "if loading screen is waiting for user input"};
 cvar_t scr_loadingscreen_count = {0, "scr_loadingscreen_count","1", "number of loading screen files to use randomly (named loading.tga, loading2.tga, loading3.tga, ...)"};
 cvar_t scr_loadingscreen_firstforstartup = {0, "scr_loadingscreen_firstforstartup","0", "remove loading.tga from random scr_loadingscreen_count selection and only display it on client startup, 0 = normal, 1 = firstforstartup"};
 cvar_t scr_loadingscreen_barcolor = {0, "scr_loadingscreen_barcolor", "0 0 1", "rgb color of loadingscreen progress bar"};
@@ -1345,6 +1347,8 @@ void CL_Screen_Init(void)
 	Cvar_RegisterVariable (&scr_loadingscreen_scale_base);
 	Cvar_RegisterVariable (&scr_loadingscreen_scale_limit);
 	Cvar_RegisterVariable (&scr_loadingscreen_picture);
+	Cvar_RegisterVariable (&scr_loadingscreen_mapname);
+	Cvar_RegisterVariable (&scr_loadingscreen_waiting);
 	Cvar_RegisterVariable (&scr_loadingscreen_count);
 	Cvar_RegisterVariable (&scr_loadingscreen_firstforstartup);
 	Cvar_RegisterVariable (&scr_loadingscreen_barcolor);
@@ -2576,6 +2580,18 @@ void SCR_SetLoadingSplash (const char *mapname)
 	// otherwise the appropriate function just calls this with a known mapname.
 	// to reset to black screen, just call this with NULL mapname
 
+	#if 1 // Reki (December 13 2023): Replace hardcoded loading menu with MenuQC
+	if (mapname && mapname[0]) {
+		strlcpy(vabuf, mapname, sizeof(vabuf));
+	}
+	
+	if (!vabuf[0])
+		strlcpy(vabuf, "", sizeof(vabuf));
+	
+	Cvar_SetQuick(&scr_loadingscreen_mapname, vabuf);
+	vabuf[0] = 0; // clear for the hardcoded stuff
+	#endif
+
 	if (mapname && mapname[0]) {
 		// try the current aspect ratio
 		dpsnprintf(vabuf, sizeof(vabuf), "gfx/splashes/%s_%s", mapname, scr_aspectname.string);
@@ -2718,35 +2734,78 @@ static void SCR_DrawLoadingScreen_SharedSetup (qboolean clear)
 
 static void SCR_DrawLoadingScreen (qboolean clear)
 {
-	// we only need to draw the image if it isn't already there
-	GL_BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	GL_DepthRange(0, 1);
-	GL_PolygonOffset(0, 0);
-	GL_DepthTest(false);
-//	R_Mesh_ResetTextureState();
-	GL_Color(1,1,1,1);
-	if(loadingscreentexture)
+	// Reki (December 13 2023): Allow MenuQC to intercept and use its own loading screen
+	#ifdef CONFIG_MENU
+	prvm_prog_t *prog = MVM_prog;
+
+	if (PRVM_menufunction(m_drawloading)) // use MenuQC entrypoint if it exists
 	{
+		GL_BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		GL_DepthRange(0, 1);
+		GL_PolygonOffset(0, 0);
+		GL_DepthTest(false);
+		GL_Color(1,1,1,1);
+
+		Cvar_SetValueQuick(&scr_loadingscreen_waiting, SCR_LoadingScreenWaiting());
+
 		R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreentexture_vertex3f, NULL, loadingscreentexture_texcoord2f);
-		R_SetupShader_Generic(loadingscreentexture, NULL, GL_MODULATE, 1, true, true, true);
-		R_Mesh_Draw(0, 4, 0, 2, polygonelement3i, NULL, 0, polygonelement3s, NULL, 0);
+		R_SetupShader_Generic(loadingscreentexture, NULL, GL_MODULATE, 1, true, true, false);
+		PRVM_G_FLOAT(OFS_PARM0) = vid.width;
+		PRVM_G_FLOAT(OFS_PARM1) = vid.height;
+		PRVM_G_FLOAT(OFS_PARM2) = 0;
+		PRVM_G_FLOAT(OFS_PARM3) = 1;
+		prog->ExecuteProgram(prog, PRVM_menufunction(m_drawloading), "");
+
+		// Reki: eh... this is a hack but since DP MenuQC doesn't have drawrotpic or beginpolygon, there's
+		// not much I can do without serious overhauls. Would rather just hack it in I guess.
+		if(loadingscreenind)
+		{
+			matrix4x4_t rotate;
+			Matrix4x4_CreateTranslate(&rotate, loadingscreenind_pos[0], loadingscreenind_pos[1], 0.f);
+			Matrix4x4_ConcatRotate(&rotate, loadingscreenind_angle, 0, 0, 1);
+			GL_BlendFunc(GL_ONE, GL_ONE); // draw the ring additive in case it goes over the loading bg
+			R_EntityMatrix(&rotate);
+			R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreenind_vertex3f, NULL, loadingscreenind_texcoord2f);
+			R_SetupShader_Generic(Draw_GetPicTexture(loadingscreenind), NULL, GL_MODULATE, 1, true, true, false);
+			R_Mesh_Draw(0, 4, 0, 2, polygonelement3i, NULL, 0, polygonelement3s, NULL, 0);
+			R_EntityMatrix(&identitymatrix);
+		}
 	}
-	R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreenpic_vertex3f, NULL, loadingscreenpic_texcoord2f);
-	R_SetupShader_Generic(Draw_GetPicTexture(loadingscreenpic), NULL, GL_MODULATE, 1, true, true, false);
-	R_Mesh_Draw(0, 4, 0, 2, polygonelement3i, NULL, 0, polygonelement3s, NULL, 0);
-	if(loadingscreenind)
+	else // fall back to engine behavior
 	{
-		matrix4x4_t rotate;
-		Matrix4x4_CreateTranslate(&rotate, loadingscreenind_pos[0], loadingscreenind_pos[1], 0.f);
-		Matrix4x4_ConcatRotate(&rotate, loadingscreenind_angle, 0, 0, 1);
-		GL_BlendFunc(GL_ONE, GL_ONE); // draw the ring additive in case it goes over the loading bg
-		R_EntityMatrix(&rotate);
-		R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreenind_vertex3f, NULL, loadingscreenind_texcoord2f);
-		R_SetupShader_Generic(Draw_GetPicTexture(loadingscreenind), NULL, GL_MODULATE, 1, true, true, false);
+	#endif
+		// we only need to draw the image if it isn't already there
+		GL_BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		GL_DepthRange(0, 1);
+		GL_PolygonOffset(0, 0);
+		GL_DepthTest(false);
+	//	R_Mesh_ResetTextureState();
+		GL_Color(1,1,1,1);
+		if(loadingscreentexture)
+		{
+			R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreentexture_vertex3f, NULL, loadingscreentexture_texcoord2f);
+			R_SetupShader_Generic(loadingscreentexture, NULL, GL_MODULATE, 1, true, true, true);
+			R_Mesh_Draw(0, 4, 0, 2, polygonelement3i, NULL, 0, polygonelement3s, NULL, 0);
+		}
+		R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreenpic_vertex3f, NULL, loadingscreenpic_texcoord2f);
+		R_SetupShader_Generic(Draw_GetPicTexture(loadingscreenpic), NULL, GL_MODULATE, 1, true, true, false);
 		R_Mesh_Draw(0, 4, 0, 2, polygonelement3i, NULL, 0, polygonelement3s, NULL, 0);
-		R_EntityMatrix(&identitymatrix);
+		if(loadingscreenind)
+		{
+			matrix4x4_t rotate;
+			Matrix4x4_CreateTranslate(&rotate, loadingscreenind_pos[0], loadingscreenind_pos[1], 0.f);
+			Matrix4x4_ConcatRotate(&rotate, loadingscreenind_angle, 0, 0, 1);
+			GL_BlendFunc(GL_ONE, GL_ONE); // draw the ring additive in case it goes over the loading bg
+			R_EntityMatrix(&rotate);
+			R_Mesh_PrepareVertices_Generic_Arrays(4, loadingscreenind_vertex3f, NULL, loadingscreenind_texcoord2f);
+			R_SetupShader_Generic(Draw_GetPicTexture(loadingscreenind), NULL, GL_MODULATE, 1, true, true, false);
+			R_Mesh_Draw(0, 4, 0, 2, polygonelement3i, NULL, 0, polygonelement3s, NULL, 0);
+			R_EntityMatrix(&identitymatrix);
+		}
+		SCR_DrawLoadingStack();
+	#ifdef CONFIG_MENU
 	}
-	SCR_DrawLoadingStack();
+	#endif
 }
 
 static void SCR_DrawLoadingScreen_SharedFinish (qboolean clear)
@@ -3136,9 +3195,9 @@ void CL_UpdateScreen(void)
 	else if (key_consoleactive)
 		VID_SetMouse(vid.fullscreen, false, false);
 	else if (key_dest == key_menu_grabbed)
-		VID_SetMouse(true, vid_mouse.integer && !in_client_mouse && !vid_touchscreen.integer, !vid_touchscreen.integer);
+		VID_SetMouse(true, vid_mouse.integer && !USE_HW_MOUSE && !vid_touchscreen.integer, !vid_touchscreen.integer);
 	else if (key_dest == key_menu)
-		VID_SetMouse(vid.fullscreen, vid_mouse.integer && !in_client_mouse && !vid_touchscreen.integer, !vid_touchscreen.integer);
+		VID_SetMouse(vid.fullscreen, vid_mouse.integer && !USE_HW_MOUSE && !vid_touchscreen.integer, !vid_touchscreen.integer);
 	else
 		VID_SetMouse(vid.fullscreen, vid_mouse.integer && !cl.csqc_wantsmousemove && cl_prydoncursor.integer <= 0 && (!cls.demoplayback || cl_demo_mousegrab.integer) && !vid_touchscreen.integer, !vid_touchscreen.integer);
 

@@ -231,6 +231,19 @@ static ogg_int64_t (*qov_pcm_total) (OggVorbis_File *vf,int i);
 static long (*qov_read) (OggVorbis_File *vf,char *buffer,int length,
 						 int bigendianp,int word,int sgned,int *bitstream);
 
+/* Ogg BITSTREAM PRIMITIVES: general ***************************/
+
+static int      (*qogg_stream_init) (ogg_stream_state *os,int serialno);
+static int      (*qogg_stream_clear) (ogg_stream_state *os);
+
+
+static dllfunction_t oggfuncs[] =
+{
+	{"ogg_stream_init", (void **) &qogg_stream_init},
+	{"ogg_stream_clear", (void **) &qogg_stream_clear},
+	{NULL, NULL}
+};
+
 static dllfunction_t vorbisfilefuncs[] =
 {
 	{"ov_clear",				(void **) &qov_clear},
@@ -252,7 +265,7 @@ static dllfunction_t vorbisfuncs[] =
 // Handles for the Vorbis and Vorbisfile DLLs
 static dllhandle_t vo_dll = NULL;
 static dllhandle_t vf_dll = NULL;
-
+static dllhandle_t og_dll = NULL;
 
 /*
 =================================================================
@@ -271,6 +284,21 @@ Try to load the VorbisFile DLL
 */
 qboolean OGG_OpenLibrary (void)
 {
+	Con_DPrintf("OGG_OpenLibrary\n");
+	const char* dllnames_og [] =
+	{
+#if defined(WIN32)
+		"libogg-0.dll",
+		"libogg.dll",
+		"ogg.dll",
+#elif defined(__APPLE__)
+		"libogg.dylib",
+#else
+		"libogg.so.0",
+		"libogg.so",
+#endif
+		NULL
+	};
 	const char* dllnames_vo [] =
 	{
 #if defined(WIN32)
@@ -311,7 +339,7 @@ qboolean OGG_OpenLibrary (void)
 	// Load the DLLs
 	// We need to load both by hand because some OSes seem to not load
 	// the vorbis DLL automatically when loading the VorbisFile DLL
-	return Sys_LoadLibrary (dllnames_vo, &vo_dll, vorbisfuncs) && Sys_LoadLibrary (dllnames_vf, &vf_dll, vorbisfilefuncs);
+	return 		Sys_LoadLibrary (dllnames_og, &og_dll, oggfuncs) && Sys_LoadLibrary (dllnames_vo, &vo_dll, vorbisfuncs) && Sys_LoadLibrary (dllnames_vf, &vf_dll, vorbisfilefuncs);
 }
 
 

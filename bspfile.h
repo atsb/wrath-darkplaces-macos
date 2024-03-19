@@ -188,6 +188,12 @@ typedef struct dplane_s
 #define CONTENTSQ3_TRIGGER			0x40000000 // used by trigger entities
 #define CONTENTSQ3_NODROP			0x80000000 // remove items that fall into this brush
 
+#define CONTENTSWRATH_INTERACTCLIP	0x00000080 // Reki: dphitcontents is shit, this *should* passthrough directly but for some reason has 
+#define CONTENTSWRATH_UNUSED1		0x00000100 // to go through some hacky hardcoded translation layer... not good
+#define CONTENTSWRATH_UNUSED2		0x00000200 // 
+#define CONTENTSWRATH_UNUSED3		0x00000400 // 
+#define CONTENTSWRATH_UNUSED4		0x00000800 // 
+
 #define SUPERCONTENTS_SOLID			0x00000001
 #define SUPERCONTENTS_WATER			0x00000002
 #define SUPERCONTENTS_SLIME			0x00000004
@@ -201,6 +207,11 @@ typedef struct dplane_s
 #define SUPERCONTENTS_DONOTENTER	0x00000400
 #define SUPERCONTENTS_BOTCLIP		0x00000800
 #define SUPERCONTENTS_OPAQUE		0x00001000
+#define SUPERCONTENTS_INTERACTCLIP  0x00002000
+#define SUPERCONTENTS_WRATHUNUSED1  0x00004000
+#define SUPERCONTENTS_WRATHUNUSED2  0x00008000
+#define SUPERCONTENTS_WRATHUNUSED3  0x00010000
+#define SUPERCONTENTS_WRATHUNUSED4  0x00020000
 // TODO: is there any reason to define:
 //   fog?
 //   areaportal?

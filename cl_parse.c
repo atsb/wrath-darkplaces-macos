@@ -104,6 +104,13 @@ const char *svc_strings[128] =
 	"svc_trailparticles", //	60		// [short] entnum [short] effectnum [vector] start [vector] end
 	"svc_pointparticles", //	61		// [short] effectnum [vector] start [vector] velocity [short] count
 	"svc_pointparticles1", //	62		// [short] effectnum [vector] start, same as svc_pointparticles except velocity is zero and count is 1
+	"", // 63
+	"", // 64
+	"svcwrath_advsound", // 65
+	"", // 66
+	"", // 67
+	"", // 68
+	"", // 69
 };
 
 const char *qw_svc_strings[128] =
@@ -270,6 +277,9 @@ static void CL_ParseStartSoundPacket(int largesoundindex)
 			sound_num = (unsigned short) MSG_ReadShort(&cl_message);
 		else
 			sound_num = MSG_ReadByte(&cl_message);
+
+		if (field_mask & SND_FLAGS)
+			fflags |= MSG_ReadByte(&cl_message);
 	}
 
 	channel = CHAN_NET2ENGINE(channel);
@@ -291,8 +301,88 @@ static void CL_ParseStartSoundPacket(int largesoundindex)
 	if (ent >= cl.max_entities)
 		CL_ExpandEntities(ent);
 
-	if( !CL_VM_Event_Sound(sound_num, volume / 255.0f, channel, attenuation, ent, pos, fflags, speed) )
+	if( !CL_VM_Event_Sound(sound_num, volume / 255.0f, channel, attenuation, ent, pos, fflags, speed, 0) )
 		S_StartSound_StartPosition_Flags (ent, channel, cl.sound_precache[sound_num], pos, volume/255.0f, attenuation, 0, fflags, speed);
+}
+
+static void CL_ParseAdvancedSoundPacket(void)
+{
+	vec3_t  pos;
+	int 	channel, ent;
+	int 	sound_num;
+	int 	volume;
+	int 	field_mask;
+	float 	attenuation;
+	float	speed;
+	float	trapezoid_frac;
+	int		fflags = CHANNELFLAG_NONE;
+
+
+	field_mask = MSG_ReadByte(&cl_message);
+	if (field_mask & SND_MOREBYTES)
+		field_mask |= MSG_ReadByte(&cl_message) << 8;
+
+	if (field_mask & SND_VOLUME)
+		volume = MSG_ReadByte(&cl_message);
+	else
+		volume = DEFAULT_SOUND_PACKET_VOLUME;
+
+	if (field_mask & SND_ATTENUATION)
+		attenuation = MSG_ReadByte(&cl_message) / 64.0;
+	else
+		attenuation = DEFAULT_SOUND_PACKET_ATTENUATION;
+
+	if (field_mask & SND_SPEEDUSHORT4000)
+		speed = ((unsigned short)MSG_ReadShort(&cl_message)) / 4000.0f;
+	else
+		speed = 1.0f;
+
+	if (field_mask & SND_LARGEENTITY)
+	{
+		ent = (unsigned short)MSG_ReadShort(&cl_message);
+		channel = MSG_ReadChar(&cl_message);
+	}
+	else
+	{
+		channel = (unsigned short)MSG_ReadShort(&cl_message);
+		ent = channel >> 3;
+		channel &= 7;
+	}
+
+	if ((field_mask & SND_LARGESOUND) || cls.protocol == PROTOCOL_NEHAHRABJP2 || cls.protocol == PROTOCOL_NEHAHRABJP3)
+		sound_num = (unsigned short)MSG_ReadShort(&cl_message);
+	else
+		sound_num = MSG_ReadByte(&cl_message);
+
+	if (field_mask & SND_FLAGS)
+			fflags |= MSG_ReadByte(&cl_message);
+
+	channel = CHAN_NET2ENGINE(channel);
+
+	MSG_ReadVector(&cl_message, pos, cls.protocol);
+
+	if (field_mask & SND_TRAPEZOID)
+		trapezoid_frac = MSG_ReadByte(&cl_message) / 0xFF;
+	else
+		trapezoid_frac = 0;
+
+	if (sound_num >= MAX_SOUNDS)
+	{
+		Con_Printf("CL_ParseAdvancedSoundPacket: sound_num (%i) >= MAX_SOUNDS (%i)\n", sound_num, MAX_SOUNDS);
+		return;
+	}
+
+	if (ent >= MAX_EDICTS)
+	{
+		Con_Printf("CL_ParseAdvancedSoundPacket: ent = %i", ent);
+		return;
+	}
+
+	if (ent >= cl.max_entities)
+		CL_ExpandEntities(ent);
+
+	if (!CL_VM_Event_Sound(sound_num, volume / 255.0f, channel, attenuation, ent, pos, fflags, speed, trapezoid_frac))
+		S_StartSound_StartPosition_Wrath(ent, channel, cl.sound_precache[sound_num], pos, volume / 255.0f, attenuation, 0, fflags, speed, trapezoid_frac);
 }
 
 /*
@@ -1554,6 +1644,12 @@ static void CL_SendPlayerInfo(void)
 	char vabuf[1024];
 	MSG_WriteByte (&cls.netcon->message, clc_stringcmd);
 	MSG_WriteString (&cls.netcon->message, va(vabuf, sizeof(vabuf), "name \"%s\"", cl_name.string));
+
+	if (cls.protocol == PROTOCOL_WRATH)
+	{
+		MSG_WriteByte(&cls.netcon->message, clc_stringcmd);
+		MSG_WriteString(&cls.netcon->message, va(vabuf, sizeof(vabuf), "protocolver \"%i\"", PROTOCOL_WRATH_CURRENT));
+	}
 
 	MSG_WriteByte (&cls.netcon->message, clc_stringcmd);
 	MSG_WriteString (&cls.netcon->message, va(vabuf, sizeof(vabuf), "color %i %i", cl_color.integer >> 4, cl_color.integer & 15));
@@ -3904,6 +4000,7 @@ void CL_ParseServerMessage(void)
 						strip_pqc = true;
 						break;
 					case PROTOCOL_DARKPLACES7:
+					case PROTOCOL_WRATH:
 					default:
 						// ProQuake does not support
 						// these protocols
@@ -4093,6 +4190,24 @@ void CL_ParseServerMessage(void)
 
 			case svc_signonnum:
 				i = MSG_ReadByte(&cl_message);
+
+				// Reki (April 13 2023): Hijacking this as I do in DOOMBRINGER to add subversioning
+				// hopefully not too janky?
+				if (i > 100)
+				{
+					switch (i)
+					{
+						case 101:
+							cls.protocolversion = MSG_ReadLong(&cl_message);
+							Con_Printf("Server protocol subversion is %lu\n", cls.protocolversion);
+							break;
+						default:
+							Host_Error("Received unknown hijack-signon %i", i);
+							break;
+					}
+					break;
+				}
+
 				// LordHavoc: it's rude to kick off the client if they missed the
 				// reconnect somehow, so allow signon 1 even if at signon 1
 				if (i <= cls.signon && i != 1)
@@ -4230,6 +4345,9 @@ void CL_ParseServerMessage(void)
 				break;
 			case svc_pointparticles1:
 				CL_ParsePointParticles1();
+				break;
+			case svcwrath_advsound:
+				CL_ParseAdvancedSoundPacket();
 				break;
 			}
 //			R_TimeReport(svc_strings[cmd]);

@@ -463,7 +463,7 @@ static void Cmd_Exec(const char *filename)
 	size_t filenameLen = strlen(filename);
 	qboolean isdefaultcfg = filenameLen >= 11 && !strcmp(filename + filenameLen - 11, "default.cfg");
 
-	if (!strcmp(filename, "config.cfg"))
+	if (!strcmp(filename, CONFIGFILENAME))
 	{
 		filename = CONFIGFILENAME;
 		if (COM_CheckParm("-noconfig"))

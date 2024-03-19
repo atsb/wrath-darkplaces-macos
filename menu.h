@@ -76,12 +76,16 @@ void MP_Shutdown (void);*/
 void MR_Init_Commands (void);
 void MR_Init (void);
 void MR_Restart (void);
+void MR_VM_Steam_AchievementValue(const char *achID, qboolean value);
+void MR_VM_Steam_StatValue(const char *statID, float value);
+void MR_VM_Controller_Type(int index, int type);
 extern void (*MR_KeyEvent) (int key, int ascii, qboolean downevent);
 extern void (*MR_Draw) (void);
 extern void (*MR_ToggleMenu) (int mode);
 extern void (*MR_Shutdown) (void);
 extern void (*MR_NewMap) (void);
 extern int (*MR_GetServerListEntryCategory) (const serverlist_entry_t *entry);
+extern int (*MR_InputEvent) (int type, float key, float ascii);
 
 typedef struct video_resolution_s
 {

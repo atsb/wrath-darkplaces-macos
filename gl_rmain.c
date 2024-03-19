@@ -831,6 +831,7 @@ typedef struct r_glsl_permutation_s
 	int loc_Alpha;
 	int loc_BloomBlur_Parameters;
 	int loc_ClientTime;
+	int loc_TrippyScale;
 	int loc_Color_Ambient;
 	int loc_Color_Diffuse;
 	int loc_Color_Specular;
@@ -1252,6 +1253,7 @@ static void R_GLSL_CompilePermutation(r_glsl_permutation_t *p, unsigned int mode
 		p->loc_Alpha                      = qglGetUniformLocation(p->program, "Alpha");
 		p->loc_BloomBlur_Parameters       = qglGetUniformLocation(p->program, "BloomBlur_Parameters");
 		p->loc_ClientTime                 = qglGetUniformLocation(p->program, "ClientTime");
+		p->loc_TrippyScale                = qglGetUniformLocation(p->program, "TrippyScale");
 		p->loc_Color_Ambient              = qglGetUniformLocation(p->program, "Color_Ambient");
 		p->loc_Color_Diffuse              = qglGetUniformLocation(p->program, "Color_Diffuse");
 		p->loc_Color_Specular             = qglGetUniformLocation(p->program, "Color_Specular");
@@ -1440,6 +1442,7 @@ static void R_SetupShader_SetPermutationGLSL(unsigned int mode, unsigned int per
 	if (r_glsl_permutation->loc_ModelViewProjectionMatrix >= 0) qglUniformMatrix4fv(r_glsl_permutation->loc_ModelViewProjectionMatrix, 1, false, gl_modelviewprojection16f);
 	if (r_glsl_permutation->loc_ModelViewMatrix >= 0) qglUniformMatrix4fv(r_glsl_permutation->loc_ModelViewMatrix, 1, false, gl_modelview16f);
 	if (r_glsl_permutation->loc_ClientTime >= 0) qglUniform1f(r_glsl_permutation->loc_ClientTime, cl.time);
+	if (r_trippy.integer && r_glsl_permutation->loc_TrippyScale >= 0) qglUniform1f(r_glsl_permutation->loc_TrippyScale, r_trippy_scale.value);
 	CHECKGLERROR
 }
 
@@ -6461,7 +6464,7 @@ static void R_Bloom_StartFrame(void)
 		Cvar_SetValueQuick(&r_damageblur, 0);
 	}
 
-	if (!((r_glsl_postprocess.integer || r_fxaa.integer) || (!R_Stereo_ColorMasking() && r_glsl_saturation.value != 1) || (v_glslgamma.integer && !vid_gammatables_trivial))
+	if (!((r_glsl_postprocess.integer || r_fxaa.integer) || (!R_Stereo_ColorMasking() && (r_glsl_saturation.value * r_refdef.saturation) != 1) || (v_glslgamma.integer && !vid_gammatables_trivial))
 	 && !r_bloom.integer
 	 && (R_Stereo_Active() || (r_motionblur.value <= 0 && r_damageblur.value <= 0))
 	 && !useviewfbo
@@ -6766,7 +6769,7 @@ static void R_BlendView(int fbo, rtexture_t *depthtexture, rtexture_t *colortext
 			| (r_refdef.viewblend[3] > 0 ? SHADERPERMUTATION_VIEWTINT : 0)
 			| ((v_glslgamma.value && !vid_gammatables_trivial) ? SHADERPERMUTATION_GAMMARAMPS : 0)
 			| (r_glsl_postprocess.integer ? SHADERPERMUTATION_POSTPROCESSING : 0)
-			| ((!R_Stereo_ColorMasking() && r_glsl_saturation.value != 1) ? SHADERPERMUTATION_SATURATION : 0);
+			| ((!R_Stereo_ColorMasking() && (r_glsl_saturation.value * r_refdef.saturation) != 1) ? SHADERPERMUTATION_SATURATION : 0);
 
 		if (r_fb.colortexture)
 		{
@@ -6907,7 +6910,7 @@ static void R_BlendView(int fbo, rtexture_t *depthtexture, rtexture_t *colortext
 			if (r_glsl_permutation->loc_UserVec2                >= 0) qglUniform4f(r_glsl_permutation->loc_UserVec2          , uservecs[1][0], uservecs[1][1], uservecs[1][2], uservecs[1][3]);
 			if (r_glsl_permutation->loc_UserVec3                >= 0) qglUniform4f(r_glsl_permutation->loc_UserVec3          , uservecs[2][0], uservecs[2][1], uservecs[2][2], uservecs[2][3]);
 			if (r_glsl_permutation->loc_UserVec4                >= 0) qglUniform4f(r_glsl_permutation->loc_UserVec4          , uservecs[3][0], uservecs[3][1], uservecs[3][2], uservecs[3][3]);
-			if (r_glsl_permutation->loc_Saturation              >= 0) qglUniform1f(r_glsl_permutation->loc_Saturation        , r_glsl_saturation.value);
+			if (r_glsl_permutation->loc_Saturation              >= 0) qglUniform1f(r_glsl_permutation->loc_Saturation        , r_glsl_saturation.value * r_refdef.saturation);
 			if (r_glsl_permutation->loc_PixelToScreenTexCoord   >= 0) qglUniform2f(r_glsl_permutation->loc_PixelToScreenTexCoord, 1.0f/vid.width, 1.0f/vid.height);
 			if (r_glsl_permutation->loc_BloomColorSubtract      >= 0) qglUniform4f(r_glsl_permutation->loc_BloomColorSubtract   , r_bloom_colorsubtract.value, r_bloom_colorsubtract.value, r_bloom_colorsubtract.value, 0.0f);
 			break;
@@ -6925,7 +6928,7 @@ static void R_BlendView(int fbo, rtexture_t *depthtexture, rtexture_t *colortext
 			hlslPSSetParameter4f(D3DPSREGISTER_UserVec2             , uservecs[1][0], uservecs[1][1], uservecs[1][2], uservecs[1][3]);
 			hlslPSSetParameter4f(D3DPSREGISTER_UserVec3             , uservecs[2][0], uservecs[2][1], uservecs[2][2], uservecs[2][3]);
 			hlslPSSetParameter4f(D3DPSREGISTER_UserVec4             , uservecs[3][0], uservecs[3][1], uservecs[3][2], uservecs[3][3]);
-			hlslPSSetParameter1f(D3DPSREGISTER_Saturation           , r_glsl_saturation.value);
+			hlslPSSetParameter1f(D3DPSREGISTER_Saturation           , r_glsl_saturation.value * r_refdef.saturation);
 			hlslPSSetParameter2f(D3DPSREGISTER_PixelToScreenTexCoord, 1.0f/vid.width, 1.0/vid.height);
 			hlslPSSetParameter4f(D3DPSREGISTER_BloomColorSubtract   , r_bloom_colorsubtract.value, r_bloom_colorsubtract.value, r_bloom_colorsubtract.value, 0.0f);
 #endif
@@ -6948,7 +6951,7 @@ static void R_BlendView(int fbo, rtexture_t *depthtexture, rtexture_t *colortext
 			DPSOFTRAST_Uniform4f(DPSOFTRAST_UNIFORM_UserVec2          , uservecs[1][0], uservecs[1][1], uservecs[1][2], uservecs[1][3]);
 			DPSOFTRAST_Uniform4f(DPSOFTRAST_UNIFORM_UserVec3          , uservecs[2][0], uservecs[2][1], uservecs[2][2], uservecs[2][3]);
 			DPSOFTRAST_Uniform4f(DPSOFTRAST_UNIFORM_UserVec4          , uservecs[3][0], uservecs[3][1], uservecs[3][2], uservecs[3][3]);
-			DPSOFTRAST_Uniform1f(DPSOFTRAST_UNIFORM_Saturation        , r_glsl_saturation.value);
+			DPSOFTRAST_Uniform1f(DPSOFTRAST_UNIFORM_Saturation        , r_glsl_saturation.value * r_refdef.saturation);
 			DPSOFTRAST_Uniform2f(DPSOFTRAST_UNIFORM_PixelToScreenTexCoord, 1.0f/vid.width, 1.0f/vid.height);
 			DPSOFTRAST_Uniform4f(DPSOFTRAST_UNIFORM_BloomColorSubtract   , r_bloom_colorsubtract.value, r_bloom_colorsubtract.value, r_bloom_colorsubtract.value, 0.0f);
 			break;
@@ -9143,6 +9146,14 @@ void RSurf_PrepareVerticesForBatch(int batchneed, int texturenumsurfaces, const 
 
 	// check if any dynamic vertex processing must occur
 	dynamicvertex = false;
+
+	// we must use vertexbuffers for rendering, we can upload vertex buffers
+	// easily enough but if the basevertex is non-zero it becomes more
+	// difficult, so force dynamicvertex path in that case - it's suboptimal
+	// but the most optimal case is to have the geometry sources provide their
+	// own anyway.
+	if (!rsurface.modelvertex3f_vertexbuffer && firstvertex != 0)
+		dynamicvertex = true;
 
 	// a cvar to force the dynamic vertex path to be taken, for debugging
 	if (r_batch_debugdynamicvertexpath.integer)
@@ -11685,7 +11696,7 @@ void R_DecalSystem_Reset(decalsystem_t *decalsystem)
 	memset(decalsystem, 0, sizeof(*decalsystem));
 }
 
-static void R_DecalSystem_SpawnTriangle(decalsystem_t *decalsystem, const float *v0, const float *v1, const float *v2, const float *t0, const float *t1, const float *t2, const float *c0, const float *c1, const float *c2, int triangleindex, int surfaceindex, int decalsequence)
+static void R_DecalSystem_SpawnTriangle(decalsystem_t *decalsystem, const float *v0, const float *v1, const float *v2, const float *t0, const float *t1, const float *t2, const float *c0, const float *c1, const float *c2, int triangleindex, int surfaceindex, int decalsequence, float lifetime)
 {
 	tridecal_t *decal;
 	tridecal_t *decals;
@@ -11725,7 +11736,7 @@ static void R_DecalSystem_SpawnTriangle(decalsystem_t *decalsystem, const float 
 		decalsystem->numdecals = i + 1;
 
 	// initialize the decal
-	decal->lived = 0;
+	decal->lived = lifetime * -1;
 	decal->triangleindex = triangleindex;
 	decal->surfaceindex = surfaceindex;
 	decal->decalsequence = decalsequence;
@@ -11765,7 +11776,7 @@ extern cvar_t cl_decals_bias;
 extern cvar_t cl_decals_models;
 extern cvar_t cl_decals_newsystem_intensitymultiplier;
 // baseparms, parms, temps
-static void R_DecalSystem_SplatTriangle(decalsystem_t *decalsystem, float r, float g, float b, float a, float s1, float t1, float s2, float t2, int decalsequence, qboolean dynamic, float (*planes)[4], matrix4x4_t *projection, int triangleindex, int surfaceindex)
+static void R_DecalSystem_SplatTriangle(decalsystem_t *decalsystem, float r, float g, float b, float a, float s1, float t1, float s2, float t2, int decalsequence, qboolean dynamic, float (*planes)[4], matrix4x4_t *projection, int triangleindex, int surfaceindex,float lifetime2)
 {
 	int cornerindex;
 	int index;
@@ -11853,12 +11864,12 @@ static void R_DecalSystem_SplatTriangle(decalsystem_t *decalsystem, float r, flo
 		//VectorMA(v[cornerindex], cl_decals_bias.value, localnormal, v[cornerindex]);
 	}
 	if (dynamic)
-		R_DecalSystem_SpawnTriangle(decalsystem, v[0], v[1], v[2], tc[0], tc[1], tc[2], c[0], c[1], c[2], triangleindex, surfaceindex, decalsequence);
+		R_DecalSystem_SpawnTriangle(decalsystem, v[0], v[1], v[2], tc[0], tc[1], tc[2], c[0], c[1], c[2], triangleindex, surfaceindex, decalsequence, lifetime2);
 	else
 		for (cornerindex = 0;cornerindex < numpoints-2;cornerindex++)
-			R_DecalSystem_SpawnTriangle(decalsystem, v[0], v[cornerindex+1], v[cornerindex+2], tc[0], tc[cornerindex+1], tc[cornerindex+2], c[0], c[cornerindex+1], c[cornerindex+2], -1, surfaceindex, decalsequence);
+			R_DecalSystem_SpawnTriangle(decalsystem, v[0], v[cornerindex+1], v[cornerindex+2], tc[0], tc[cornerindex+1], tc[cornerindex+2], c[0], c[cornerindex+1], c[cornerindex+2], -1, surfaceindex, decalsequence, lifetime2);
 }
-static void R_DecalSystem_SplatEntity(entity_render_t *ent, const vec3_t worldorigin, const vec3_t worldnormal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float worldsize, int decalsequence)
+static void R_DecalSystem_SplatEntity(entity_render_t *ent, const vec3_t worldorigin, const vec3_t worldnormal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float worldsize,float lifetime, int decalsequence)
 {
 	matrix4x4_t projection;
 	decalsystem_t *decalsystem;
@@ -11993,7 +12004,7 @@ static void R_DecalSystem_SplatEntity(entity_render_t *ent, const vec3_t worldor
 				continue;
 			if (texture->surfaceflags & Q3SURFACEFLAG_NOMARKS)
 				continue;
-			R_DecalSystem_SplatTriangle(decalsystem, r, g, b, a, s1, t1, s2, t2, decalsequence, dynamic, planes, &projection, bih_triangles[triangleindex], surfaceindex);
+			R_DecalSystem_SplatTriangle(decalsystem, r, g, b, a, s1, t1, s2, t2, decalsequence, dynamic, planes, &projection, bih_triangles[triangleindex], surfaceindex,lifetime);
 		}
 	}
 	else
@@ -12013,13 +12024,13 @@ static void R_DecalSystem_SplatEntity(entity_render_t *ent, const vec3_t worldor
 				continue;
 			numtriangles = surface->num_triangles;
 			for (triangleindex = 0; triangleindex < numtriangles; triangleindex++)
-				R_DecalSystem_SplatTriangle(decalsystem, r, g, b, a, s1, t1, s2, t2, decalsequence, dynamic, planes, &projection, triangleindex + surface->num_firsttriangle, surfaceindex);
+				R_DecalSystem_SplatTriangle(decalsystem, r, g, b, a, s1, t1, s2, t2, decalsequence, dynamic, planes, &projection, triangleindex + surface->num_firsttriangle, surfaceindex,lifetime);
 		}
 	}
 }
 
 // do not call this outside of rendering code - use R_DecalSystem_SplatEntities instead
-static void R_DecalSystem_ApplySplatEntities(const vec3_t worldorigin, const vec3_t worldnormal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float worldsize, int decalsequence)
+static void R_DecalSystem_ApplySplatEntities(const vec3_t worldorigin, const vec3_t worldnormal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float worldsize,float lifetime, int decalsequence)
 {
 	int renderentityindex;
 	float worldmins[3];
@@ -12036,7 +12047,7 @@ static void R_DecalSystem_ApplySplatEntities(const vec3_t worldorigin, const vec
 	worldmaxs[1] = worldorigin[1] + worldsize;
 	worldmaxs[2] = worldorigin[2] + worldsize;
 
-	R_DecalSystem_SplatEntity(r_refdef.scene.worldentity, worldorigin, worldnormal, r, g, b, a, s1, t1, s2, t2, worldsize, decalsequence);
+	R_DecalSystem_SplatEntity(r_refdef.scene.worldentity, worldorigin, worldnormal, r, g, b, a, s1, t1, s2, t2, worldsize,lifetime, decalsequence);
 
 	for (renderentityindex = 0;renderentityindex < r_refdef.scene.numentities;renderentityindex++)
 	{
@@ -12044,7 +12055,7 @@ static void R_DecalSystem_ApplySplatEntities(const vec3_t worldorigin, const vec
 		if (!BoxesOverlap(ent->mins, ent->maxs, worldmins, worldmaxs))
 			continue;
 
-		R_DecalSystem_SplatEntity(ent, worldorigin, worldnormal, r, g, b, a, s1, t1, s2, t2, worldsize, decalsequence);
+		R_DecalSystem_SplatEntity(ent, worldorigin, worldnormal, r, g, b, a, s1, t1, s2, t2, worldsize,lifetime, decalsequence);
 	}
 }
 
@@ -12055,6 +12066,7 @@ typedef struct r_decalsystem_splatqueue_s
 	float color[4];
 	float tcrange[4];
 	float worldsize;
+	float lifetime;
 	int decalsequence;
 }
 r_decalsystem_splatqueue_t;
@@ -12062,7 +12074,7 @@ r_decalsystem_splatqueue_t;
 int r_decalsystem_numqueued = 0;
 r_decalsystem_splatqueue_t r_decalsystem_queue[MAX_DECALSYSTEM_QUEUE];
 
-void R_DecalSystem_SplatEntities(const vec3_t worldorigin, const vec3_t worldnormal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float worldsize)
+void R_DecalSystem_SplatEntities(const vec3_t worldorigin, const vec3_t worldnormal, float r, float g, float b, float a, float s1, float t1, float s2, float t2, float worldsize,float lifetime)
 {
 	r_decalsystem_splatqueue_t *queue;
 
@@ -12075,6 +12087,7 @@ void R_DecalSystem_SplatEntities(const vec3_t worldorigin, const vec3_t worldnor
 	Vector4Set(queue->color, r, g, b, a);
 	Vector4Set(queue->tcrange, s1, t1, s2, t2);
 	queue->worldsize = worldsize;
+	queue->lifetime = lifetime;
 	queue->decalsequence = cl.decalsequence++;
 }
 
@@ -12084,11 +12097,12 @@ static void R_DecalSystem_ApplySplatEntitiesQueue(void)
 	r_decalsystem_splatqueue_t *queue;
 
 	for (i = 0, queue = r_decalsystem_queue;i < r_decalsystem_numqueued;i++, queue++)
-		R_DecalSystem_ApplySplatEntities(queue->worldorigin, queue->worldnormal, queue->color[0], queue->color[1], queue->color[2], queue->color[3], queue->tcrange[0], queue->tcrange[1], queue->tcrange[2], queue->tcrange[3], queue->worldsize, queue->decalsequence);
+		R_DecalSystem_ApplySplatEntities(queue->worldorigin, queue->worldnormal, queue->color[0], queue->color[1], queue->color[2], queue->color[3], queue->tcrange[0], queue->tcrange[1], queue->tcrange[2], queue->tcrange[3], queue->worldsize, queue->lifetime, queue->decalsequence);
 	r_decalsystem_numqueued = 0;
 }
 
 extern cvar_t cl_decals_max;
+extern cvar_t cl_decals_fog_bias;
 static void R_DrawModelDecals_FadeEntity(entity_render_t *ent)
 {
 	int i;
@@ -12112,7 +12126,7 @@ static void R_DrawModelDecals_FadeEntity(entity_render_t *ent)
 	}
 
 	killsequence = cl.decalsequence - max(1, cl_decals_max.integer);
-	lifetime = cl_decals_time.value + cl_decals_fadetime.value;
+	lifetime = cl_decals_fadetime.value;
 
 	if (decalsystem->lastupdatetime)
 		frametime = (r_refdef.scene.time - decalsystem->lastupdatetime);
@@ -12171,6 +12185,7 @@ static void R_DrawModelDecals_Entity(entity_render_t *ent)
 	float *t2f;
 	const int *e;
 	const unsigned char *surfacevisible = ent == r_refdef.scene.worldentity ? r_refdef.viewcache.world_surfacevisible : NULL;
+	const float fogbiasrecip = 1.f / (1.f - cl_decals_fog_bias.value);
 	int numtris = 0;
 
 	numdecals = decalsystem->numdecals;
@@ -12215,8 +12230,8 @@ static void R_DrawModelDecals_Entity(entity_render_t *ent)
 			continue;
 
 		// update color values for fading decals
-		if (decal->lived >= cl_decals_time.value)
-			alpha = 1 - faderate * (decal->lived - cl_decals_time.value);
+		if (decal->lived >= 0)
+			alpha = 1 - faderate * (decal->lived);// -cl_decals_time.value);
 		else
 			alpha = 1.0f;
 
@@ -12258,10 +12273,13 @@ static void R_DrawModelDecals_Entity(entity_render_t *ent)
 		if (r_refdef.fogenabled)
 		{
 			alpha = RSurf_FogVertex(v3f);
+			alpha = max(0.f, alpha - cl_decals_fog_bias.value) * fogbiasrecip;
 			VectorScale(c4f, alpha, c4f);
 			alpha = RSurf_FogVertex(v3f + 3);
+			alpha = max(0.f, alpha - cl_decals_fog_bias.value) * fogbiasrecip;
 			VectorScale(c4f + 4, alpha, c4f + 4);
 			alpha = RSurf_FogVertex(v3f + 6);
+			alpha = max(0.f, alpha - cl_decals_fog_bias.value) * fogbiasrecip;
 			VectorScale(c4f + 8, alpha, c4f + 8);
 		}
 

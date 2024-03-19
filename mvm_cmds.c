@@ -49,6 +49,8 @@ const char *vm_m_extensions =
 "DP_QC_URI_POST "
 "DP_QC_WHICHPACK "
 "FTE_STRINGS "
+"EXT_STEAM_REKI "
+"EXT_CONTROLLER_REKI "
 ;
 
 /*
@@ -110,14 +112,17 @@ static void VM_M_setkeydest(prvm_prog_t *prog)
 	case 0:
 		// key_game
 		key_dest = key_game;
+		in_menu_mouse = false;
 		break;
 	case 2:
 		// key_menu
 		key_dest = key_menu;
+		in_menu_mouse = true;
 		break;
 	case 3:
 		// key_menu_grabbed
 		key_dest = key_menu_grabbed;
+		in_menu_mouse = true;
 		break;
 	case 1:
 		// key_message
@@ -792,7 +797,7 @@ static void VM_M_getmousepos(prvm_prog_t *prog)
 
 	if (key_consoleactive || (key_dest != key_menu && key_dest != key_menu_grabbed))
 		VectorSet(PRVM_G_VECTOR(OFS_RETURN), 0, 0, 0);
-	else if (in_client_mouse)
+	else if (USE_HW_MOUSE)
 		VectorSet(PRVM_G_VECTOR(OFS_RETURN), in_windowmouse_x * vid_conwidth.integer / vid.width, in_windowmouse_y * vid_conheight.integer / vid.height, 0);
 	else
 		VectorSet(PRVM_G_VECTOR(OFS_RETURN), in_mouse_x * vid_conwidth.integer / vid.width, in_mouse_y * vid_conheight.integer / vid.height, 0);
@@ -913,6 +918,115 @@ static void VM_M_crypto_getmyidstatus(prvm_prog_t *prog)
 			break;
 	}
 }
+
+// EXT_STEAM_REKI
+static void VM_M_stachievement_unlock(prvm_prog_t *prog)
+{
+	const char *achID;
+	VM_SAFEPARMCOUNT(1, VM_M_stachievement_unlock);
+	achID = PRVM_G_STRING(OFS_PARM0);
+
+	// Steam_AchievementUnlock(achID);
+}
+
+static void VM_M_stachievement_query(prvm_prog_t *prog)
+{
+	const char *achID;
+	VM_SAFEPARMCOUNT(1, VM_M_stachievement_query);
+	achID = PRVM_G_STRING(OFS_PARM0);
+
+	// Steam_AchievementQuery(achID);
+}
+
+static void VM_M_ststat_setvalue(prvm_prog_t *prog)
+{
+	const char *statID;
+	float statValue;
+	VM_SAFEPARMCOUNT(2, VM_M_ststat_setvalue);
+	statID = PRVM_G_STRING(OFS_PARM0);
+	statValue = PRVM_G_FLOAT(OFS_PARM1);
+
+	// Steam_StatSet(statID, statValue);
+}
+
+static void VM_M_ststat_increment(prvm_prog_t *prog)
+{
+	const char *statID;
+	float statValue;
+	VM_SAFEPARMCOUNT(2, VM_M_ststat_increment);
+	statID = PRVM_G_STRING(OFS_PARM0);
+	statValue = PRVM_G_FLOAT(OFS_PARM1);
+
+	// Steam_StatIncrement(statID, statValue);
+}
+
+static void VM_M_ststat_query(prvm_prog_t *prog)
+{
+	const char *statID;
+	VM_SAFEPARMCOUNT(1, VM_M_ststat_query);
+	statID = PRVM_G_STRING(OFS_PARM0);
+
+	// Steam_StatQuery(statID);
+}
+
+static void VM_M_stachievement_register(prvm_prog_t *prog)
+{
+	const char *achID;
+	VM_SAFEPARMCOUNT(1, VM_M_stachievement_register);
+	achID = PRVM_G_STRING(OFS_PARM0);
+
+	// Steam_RegisterAchievement(achID);
+}
+
+static void VM_M_ststat_register(prvm_prog_t *prog)
+{
+	const char *statID;
+	int statType;
+	VM_SAFEPARMCOUNT(2, VM_M_ststat_register);
+	statID = PRVM_G_STRING(OFS_PARM0);
+	statType = (int)PRVM_G_FLOAT(OFS_PARM1);
+
+	// Steam_RegisterStat(statID, statType);
+}
+
+// EXT_CONTROLLER_REKI
+static void VM_M_controller_query(prvm_prog_t *prog)
+{
+	int deviceIndex;
+	VM_SAFEPARMCOUNT(1, VM_M_controller_query);
+	deviceIndex = (int)PRVM_G_FLOAT(OFS_PARM0);
+
+	// Controller_Poll(deviceIndex);
+}
+
+static void VM_M_controller_rumble(prvm_prog_t *prog)
+{
+	float lowfreq, highfreq;
+	int index, msec;
+
+	VM_SAFEPARMCOUNT(4, VM_CL_ststat_register);
+	index = (int)PRVM_G_FLOAT(OFS_PARM0);
+	lowfreq = PRVM_G_FLOAT(OFS_PARM1);
+	highfreq = PRVM_G_FLOAT(OFS_PARM2);
+	msec = (int)PRVM_G_FLOAT(OFS_PARM3);
+
+	VID_ControllerRumble(index, lowfreq, highfreq, msec);
+}
+
+static void VM_M_controller_rumbletriggers(prvm_prog_t *prog)
+{
+	float lefttrigger, righttrigger;
+	int index, msec;
+
+	VM_SAFEPARMCOUNT(4, VM_CL_ststat_register);
+	index = (int)PRVM_G_FLOAT(OFS_PARM0);
+	lefttrigger = PRVM_G_FLOAT(OFS_PARM1);
+	righttrigger = PRVM_G_FLOAT(OFS_PARM2);
+	msec = (int)PRVM_G_FLOAT(OFS_PARM3);
+
+	VID_ControllerRumbleTriggers(index, lefttrigger, righttrigger, msec);
+}
+//
 
 prvm_builtin_t vm_m_builtins[] = {
 NULL,									//   #0 NULL function (not callable)
@@ -1673,19 +1787,19 @@ NULL,						// #726
 NULL,						// #727
 NULL,						// #728
 NULL,						// #729
-NULL,						// #730
-NULL,						// #731
-NULL,						// #732
-NULL,						// #733
-NULL,						// #734
-NULL,						// #735
-NULL,						// #736
-NULL,						// #737
+VM_M_stachievement_unlock,	// #730 void(string achievement_id) stachievement_unlock (EXT_STEAM_REKI)
+VM_M_stachievement_query,	// #731 void(string achievement_id) stachievement_query (EXT_STEAM_REKI)
+VM_M_ststat_setvalue,		// #732 void(string stat_id, float value) ststat_setvalue (EXT_STEAM_REKI)
+VM_M_ststat_increment,		// #733 void(string stat_id, float value) ststat_increment (EXT_STEAM_REKI)
+VM_M_ststat_query,			// #734 void(string stat_id) ststat_query (EXT_STEAM_REKI)
+VM_M_stachievement_register,// #735 void(string achievement_id) stachievement_register (EXT_STEAM_REKI)
+VM_M_ststat_register,		// #736 void(string stat_id) ststat_register (EXT_STEAM_REKI)
+NULL,	   					// #737
 NULL,						// #738
 NULL,						// #739
-NULL,						// #740
-NULL,						// #741
-NULL,						// #742
+VM_M_controller_query,	    // #740 void(float index) controller_query (EXT_CONTROLLER_REKI)
+VM_M_controller_rumble,		// #741 void(float index, float lowmult, float highmult, float msec) controller_rumble (EXT_CONTROLLER_REKI)
+VM_M_controller_rumbletriggers,// #742 void(float index, float leftmult, float rightmult, float msec) controller_rumbletriggers (EXT_CONTROLLER_REKI)
 NULL,						// #743
 NULL,						// #744
 NULL,						// #745

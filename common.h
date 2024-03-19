@@ -120,6 +120,7 @@ void StoreLittleShort (unsigned char *buffer, unsigned short i);
 typedef enum protocolversion_e
 {
 	PROTOCOL_UNKNOWN,
+	PROTOCOL_WRATH, ///< clc_move changes
 	PROTOCOL_DARKPLACES7, ///< added QuakeWorld-style movement protocol to allow more consistent prediction
 	PROTOCOL_DARKPLACES6, ///< various changes
 	PROTOCOL_DARKPLACES5, ///< uses EntityFrame5 entity snapshot encoder/decoder which is based on a Tribes networking article at http://www.garagegames.com/articles/networking1/
@@ -136,6 +137,9 @@ typedef enum protocolversion_e
 	PROTOCOL_NEHAHRABJP3 ///< same as NEHAHRABJP2 but with some changes
 }
 protocolversion_t;
+
+#define PROTOCOL_WRATH_SHORTSCALE	1
+#define PROTOCOL_WRATH_CURRENT		1
 
 /*! \name Message IO functions.
  * Handles byte ordering and avoids alignment errors

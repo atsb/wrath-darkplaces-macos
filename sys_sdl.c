@@ -1,11 +1,14 @@
 
 #ifdef WIN32
 #ifdef _MSC_VER
-#pragma comment(lib, "sdl2.lib")
-#pragma comment(lib, "sdl2main.lib")
+#pragma comment(lib, "sdl.lib")
+#pragma comment(lib, "sdlmain.lib")
 #endif
 #include <io.h>
 #include "conio.h"
+// Reki (February 29 2024): make sure dedicated GPUs are preferred
+__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+__declspec(dllexport) unsigned long AmdPowerXpressRequestHighPerformance = 0x00000001;
 #else
 #include <unistd.h>
 #include <fcntl.h>
@@ -192,6 +195,39 @@ void Sys_InitConsole (void)
 {
 }
 
+#ifdef WIN32
+typedef enum { dpi_unaware = 0, dpi_system_aware = 1, dpi_monitor_aware = 2 } dpi_awareness;
+typedef BOOL(WINAPI *SetProcessDPIAwareFunc)();
+typedef HRESULT(WINAPI *SetProcessDPIAwarenessFunc)(dpi_awareness value);
+
+static void Sys_SetDPIAware(void) // Reki (April 21 2023): Hack to get around SDL2 bug ignoring highdpi on windows
+{
+	HMODULE hUser32, hShcore;
+	SetProcessDPIAwarenessFunc setDPIAwareness;
+	SetProcessDPIAwareFunc setDPIAware;
+
+	hShcore = LoadLibraryA("Shcore.dll");
+	hUser32 = LoadLibraryA("user32.dll");
+	setDPIAwareness = (SetProcessDPIAwarenessFunc)(hShcore ? GetProcAddress(hShcore, "SetProcessDpiAwareness") : NULL);
+	setDPIAware = (SetProcessDPIAwareFunc)(hUser32 ? GetProcAddress(hUser32, "SetProcessDPIAware") : NULL);
+
+	if (setDPIAwareness) /* Windows 8.1+ */
+		setDPIAwareness(dpi_monitor_aware);
+	else if (setDPIAware) /* Windows Vista-8.0 */
+		setDPIAware();
+
+	if (hShcore)
+		FreeLibrary(hShcore);
+	if (hUser32)
+		FreeLibrary(hUser32);
+}
+#else
+static void Sys_SetDPIAware(void) // Reki (April 21 2023): Stub this for now, there's probably something I need to do for MacOS or Linux dpi scaling
+{
+	return;
+}
+#endif
+
 int main (int argc, char *argv[])
 {
 	signal(SIGFPE, SIG_IGN);
@@ -220,6 +256,8 @@ int main (int argc, char *argv[])
 	// we don't know which systems we'll want to init, yet...
 	SDL_Init(0);
 
+	Sys_SetDPIAware();
+
 	Host_Main();
 
 	return 0;
@@ -233,4 +271,8 @@ unsigned int Sys_SDL_GetTicks (void)
 void Sys_SDL_Delay (unsigned int milliseconds)
 {
 	SDL_Delay(milliseconds);
+}
+char* Sys_SDL_GetBasePath(void) 
+{
+	return SDL_GetBasePath();
 }

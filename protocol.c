@@ -64,6 +64,7 @@ struct protocolversioninfo_s
 }
 protocolversioninfo[] =
 {
+	{ 3610, PROTOCOL_WRATH		 , "WRATH"},
 	{ 3504, PROTOCOL_DARKPLACES7 , "DP7"},
 	{ 3503, PROTOCOL_DARKPLACES6 , "DP6"},
 	{ 3502, PROTOCOL_DARKPLACES5 , "DP5"},
@@ -2232,7 +2233,12 @@ void EntityState5_WriteUpdate(int number, const entity_state_t *s, int changedbi
 			if (bits & E5_ALPHA)
 				MSG_WriteByte(msg, s->alpha);
 			if (bits & E5_SCALE)
-				MSG_WriteByte(msg, s->scale);
+			{
+				if (sv.protocol == PROTOCOL_WRATH && host_client->protocolversion >= PROTOCOL_WRATH_SHORTSCALE)
+					MSG_WriteShort(msg, s->scale);
+				else
+					MSG_WriteByte(msg, s->scale);
+			}
 			if (bits & E5_COLORMAP)
 				MSG_WriteByte(msg, s->colormap);
 			if (bits & E5_ATTACHMENT)
@@ -2426,7 +2432,12 @@ static void EntityState5_ReadUpdate(entity_state_t *s, int number)
 	if (bits & E5_ALPHA)
 		s->alpha = MSG_ReadByte(&cl_message);
 	if (bits & E5_SCALE)
-		s->scale = MSG_ReadByte(&cl_message);
+	{
+		if (cls.protocol == PROTOCOL_WRATH && cls.protocolversion >= PROTOCOL_WRATH_SHORTSCALE)
+			s->scale = MSG_ReadShort(&cl_message);
+		else
+			s->scale = MSG_ReadByte(&cl_message);
+	}
 	if (bits & E5_COLORMAP)
 		s->colormap = MSG_ReadByte(&cl_message);
 	if (bits & E5_ATTACHMENT)

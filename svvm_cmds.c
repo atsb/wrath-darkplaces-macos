@@ -229,6 +229,8 @@ const char *vm_sv_extensions =
 "EXT_WRATH "
 "EXT_NODEGRAPH "
 "DP_RM_CLIPGROUP "
+"EXT_STEAM_REKI "
+"EXT_CONTROLLER_REKI "
 //"EXT_CSQC " // not ready yet
 ;
 
@@ -530,8 +532,9 @@ static void VM_SV_sound(prvm_prog_t *prog)
 	int flags;
 	float attenuation;
 	float pitchchange;
+	float trapezoid_frac;
 
-	VM_SAFEPARMCOUNTRANGE(4, 7, VM_SV_sound);
+	VM_SAFEPARMCOUNTRANGE(4, 8, VM_SV_sound);
 
 	entity = PRVM_G_EDICT(OFS_PARM0);
 	channel = (int)PRVM_G_FLOAT(OFS_PARM1);
@@ -561,7 +564,16 @@ static void VM_SV_sound(prvm_prog_t *prog)
 	else
 	{
 		// LordHavoc: we only let the qc set certain flags, others are off-limits
-		flags = (int)PRVM_G_FLOAT(OFS_PARM6) & (CHANNELFLAG_RELIABLE | CHANNELFLAG_FORCELOOP | CHANNELFLAG_PAUSED);
+		flags = (int)PRVM_G_FLOAT(OFS_PARM6) & (CHANNELFLAG_RELIABLE | CHANNELFLAG_NETMASK);
+	}
+
+	if (prog->argc < 8)
+	{
+		trapezoid_frac = 0;
+	}
+	else
+	{
+		trapezoid_frac = bound(0, PRVM_G_FLOAT(OFS_PARM7), 1);
 	}
 
 	if (volume < 0 || volume > 255)
@@ -584,7 +596,7 @@ static void VM_SV_sound(prvm_prog_t *prog)
 		return;
 	}
 
-	SV_StartSound (entity, channel, sample, volume, attenuation, flags & CHANNELFLAG_RELIABLE, pitchchange);
+	SV_StartSound_Advanced(entity, channel, sample, volume, attenuation, flags, pitchchange, trapezoid_frac);
 }
 
 /*
@@ -1542,6 +1554,12 @@ static void VM_SV_WriteEntity(prvm_prog_t *prog)
 	MSG_WriteShort (WriteDest(prog), PRVM_G_EDICTNUM(OFS_PARM1));
 }
 
+static void VM_SV_WriteFloat(prvm_prog_t *prog)
+{
+	VM_SAFEPARMCOUNT(2, VM_SV_WriteFloat);
+	MSG_WriteFloat(WriteDest(prog), PRVM_G_FLOAT(OFS_PARM1));
+}
+
 // writes a picture as at most size bytes of data
 // message:
 //   IMGNAME \0 SIZE(short) IMGDATA
@@ -1689,6 +1707,12 @@ static void VM_SV_getlight(prvm_prog_t *prog)
 	if (sv.worldmodel && sv.worldmodel->brush.LightPoint)
 		sv.worldmodel->brush.LightPoint(sv.worldmodel, p, ambientcolor, diffusecolor, diffusenormal);
 	VectorMA(ambientcolor, 0.5, diffusecolor, PRVM_G_VECTOR(OFS_RETURN));
+	if (PRVM_serverglobalvector(getlight_ambient))
+		VectorCopy(ambientcolor, PRVM_serverglobalvector(getlight_ambient));
+	if (PRVM_serverglobalvector(getlight_diffuse))
+		VectorCopy(diffusecolor, PRVM_serverglobalvector(getlight_diffuse));
+	if (PRVM_serverglobalvector(getlight_dir))
+		VectorCopy(diffusenormal, PRVM_serverglobalvector(getlight_dir));
 }
 
 typedef struct
@@ -3246,6 +3270,24 @@ static void VM_SV_frameduration(prvm_prog_t *prog)
 		PRVM_G_FLOAT(OFS_RETURN) = model->animscenes[framenum].framecount / model->animscenes[framenum].framerate;
 }
 
+// #347 void() VM_SV_runstandardplayerphysics
+extern void SV_WalkMove(prvm_edict_t *ent);
+static void VM_SV_runstandardplayerphysics(prvm_prog_t *prog)
+{
+	prvm_edict_t	*ent;
+	usercmd_t		cmd;
+	VectorCopy(PRVM_serverglobalvector(input_angles), cmd.viewangles);
+	cmd.forwardmove = PRVM_serverglobalvector(input_movevalues)[0];
+	cmd.sidemove = PRVM_serverglobalvector(input_movevalues)[1];
+	cmd.upmove = PRVM_serverglobalvector(input_movevalues)[2];
+	cmd.buttons = PRVM_serverglobalfloat(input_buttons);
+	cmd.frametime = PRVM_serverglobalfloat(input_timelength);
+	
+	ent = PRVM_PROG_TO_EDICT(PRVM_serverglobaledict(self));
+	sv.frametime = PRVM_serverglobalfloat(input_timelength);
+	SV_WalkMove(ent);
+}
+
 // #700 float() nodegraph_graphset_clear (EXT_NODEGRAPH)
 static void VM_nodegraph_graphset_clear(prvm_prog_t *prog)
 {
@@ -3628,6 +3670,40 @@ static void VM_nodegraph_graphset_remove(prvm_prog_t *prog)
 	PRVM_G_FLOAT(OFS_RETURN) = (float)nodegraph_graphset_remove();
 }
 
+// #656 void(float f) timescale (EXT_WRATH)
+static void VM_SV_timescale(prvm_prog_t *prog) {
+	float f;
+	f = PRVM_G_FLOAT(OFS_PARM0);
+	if (f <= 0 || f > 1.0)
+	{
+		sv.timescale = 1.0;
+	}
+	else
+	{
+		sv.timescale = f;
+	}
+}
+
+// #279 void(entity ent) touchtriggers
+static void VM_SV_touchtriggers(prvm_prog_t *prog)
+{
+	prvm_edict_t	*e;
+
+	VM_SAFEPARMCOUNT(1, VM_SV_touchtriggers);
+	e = PRVM_G_EDICT(OFS_PARM0);
+	if (e == prog->edicts)
+	{
+		VM_Warning(prog, "touchtriggers: can not modify world entity\n");
+		return;
+	}
+	if (e->priv.server->free)
+	{
+		VM_Warning(prog, "touchtriggers: can not modify free entity\n");
+		return;
+	}
+	SV_LinkEdict_TouchAreaGrid(e);
+}
+
 prvm_builtin_t vm_sv_builtins[] = {
 NULL,							// #0 NULL function (not callable) (QUAKE)
 VM_makevectors,					// #1 void(vector ang) makevectors (QUAKE)
@@ -3910,8 +3986,8 @@ VM_SV_skel_delete,				// #275 void(float skel) skel_delete = #275; // (DP_SKELET
 VM_SV_frameforname,				// #276 float(float modlindex, string framename) frameforname = #276; // (DP_SKELETONOBJECTS) finds number of a specified frame in the animation, returns -1 if no match found
 VM_SV_frameduration,			// #277 float(float modlindex, float framenum) frameduration = #277; // (DP_SKELETONOBJECTS) returns the intended play time (in seconds) of the specified framegroup, if it does not exist the result is 0, if it is a single frame it may be a small value around 0.1 or 0.
 NULL,							// #278
-NULL,							// #279
-NULL,							// #280
+VM_SV_touchtriggers,			// #279
+VM_SV_WriteFloat,				// #280
 NULL,							// #281
 NULL,							// #282
 NULL,							// #283
@@ -3979,7 +4055,7 @@ NULL,							// #343 void(float usecursor) setcursormode (EXT_CSQC)
 NULL,							// #344 vector() getmousepos (EXT_CSQC)
 NULL,							// #345 float(float framenum) getinputstate (EXT_CSQC)
 NULL,							// #346 void(float sens) setsensitivityscaler (EXT_CSQC)
-NULL,							// #347 void() runstandardplayerphysics (EXT_CSQC)
+VM_SV_runstandardplayerphysics,	// #347 void() runstandardplayerphysics (EXT_CSQC)
 NULL,							// #348 string(float playernum, string keyname) getplayerkeyvalue (EXT_CSQC)
 NULL,							// #349 float() isdemo (EXT_CSQC)
 VM_isserver,					// #350 float() isserver (EXT_CSQC)
@@ -4289,8 +4365,8 @@ VM_frename,					// #651 float (string fnold, string fnnew) frename (EXT_WRATH)
 VM_fremove,					// #652 float (string fname) fremove (EXT_WRATH)
 VM_fexists,					// #653 float (string fname) fexists (EXT_WRATH)
 VM_rmtree,					// #654 float (string path) rmtree (EXT_WRATH)
-VM_SV_walkmovedist, // #655 float (float yaw, float dist[, float settrace]) walkmovedist (EXT_WRATH)
-NULL,						// #656
+VM_SV_walkmovedist,			// #655 float (float yaw, float dist[, float settrace]) walkmovedist (EXT_WRATH)
+VM_SV_timescale,			// #656 void  (float f) timescale (EXT_WRATH)
 NULL,						// #657
 NULL,						// #658
 NULL,						// #659
